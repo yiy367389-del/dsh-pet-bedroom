@@ -3,6 +3,15 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.2.2] - 2026-11-03
+
+修复发版工作流：`npm pack --pack-destination dist` 在 `dist` 不存在时直接失败，
+导致推 tag 后 Release 没发出来（v2.2.0 / v2.2.1 的 Action 都是这一步红的）。
+
+### 修复
+
+- 工作流先 `mkdir -p dist` 再打包；v2.2.2 起由 Action 自动发 Release。
+
 ## [2.2.1] - 2026-11-03
 
 修正「latest 指向旧版」：GitHub 的 `latest` 按 Release **创建时间**算，先补发 v2.0.0/v2.1.0

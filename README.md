@@ -116,6 +116,7 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 
 | 版本 | 内容 |
 |:--|:--|
+| [v2.2.2](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.2.2) | 修复发版工作流：先建 `dist` 再打包，推 tag 即可自动发版 |
 | [v2.2.1](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.2.1) | 修正 `latest` 指向：发版时显式标记最新，旧版不再抢 latest |
 | [v2.2.0](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.2.0) | 发布形态整理：Releases 资产、截图、`release.mjs`、发版工作流 |
 | [v2.1.0](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.1.0) | 新增「QQ 连接」窗口（默认 SnowLuma / OneBot 11）与 `/qq/event` 上报 |
@@ -130,10 +131,10 @@ https://github.com/yiy367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pe
 一行安装：
 
 ```bash
-dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.2.1/dsh-pet-bedroom.tgz
+dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.2.2/dsh-pet-bedroom.tgz
 ```
 
-想固定某个版本就把 URL 里的 `v2.2.1` 换成对应 tag；想始终跟最新就把整段换成
+想固定某个版本就把 URL 里的 `v2.2.2` 换成对应 tag；想始终跟最新就把整段换成
 `releases/latest/download/dsh-pet-bedroom.tgz`。
 
 从源码安装（改代码时用）：
@@ -755,6 +756,8 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 
 ## 版本与演进
 
+- **v2.2.2**：修复发版工作流。`npm pack --pack-destination dist` 在 `dist` 不存在时直接失败，
+  v2.2.0 / v2.2.1 的 Action 都红在这一步；现在先 `mkdir -p dist`，推 tag 由 Action 自动发版。
 - **v2.2.1**：修正 `latest`。GitHub 的 `latest` 按 Release 创建时间算，批量补发旧版后
   会指向旧版本；`release.mjs` 现在创建时显式 `make_latest`，并把旧版标为非 latest。
 - **v2.2.0**：按收录指南整理发布形态。每个版本都有 Release 预构建包
