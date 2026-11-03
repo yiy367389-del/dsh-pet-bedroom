@@ -3,6 +3,17 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.2.1] - 2026-11-03
+
+修正「latest 指向旧版」：GitHub 的 `latest` 按 Release **创建时间**算，先补发 v2.0.0/v2.1.0
+会让最新一版变成旧版本。
+
+### 修复
+
+- `release.mjs` 创建 Release 时显式 `make_latest: true`，`releases/latest/download/`
+  永远指向刚发的这一版。
+- 旧版 Release 标记为非 latest（v2.0.0 / v2.1.0 / v2.2.0 只保留 tag 与资产，不再抢 latest）。
+
 ## [2.2.0] - 2026-11-03
 
 按 awesome-dsh-plugin 收录指南整理发布形态：每个版本都有可直接下载的 Release。

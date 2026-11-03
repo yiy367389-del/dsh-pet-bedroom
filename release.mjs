@@ -146,7 +146,7 @@ try {
   release = await api(`/repos/${owner}/${repo}/releases`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ tag_name: tag, name: tag, body, draft: false, prerelease: false }),
+    body: JSON.stringify({ tag_name: tag, name: tag, body, draft: false, prerelease: false, make_latest: 'true' }),
   });
   console.log(`已创建 Release ${tag}（id ${release.id}）`);
 }
