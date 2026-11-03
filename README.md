@@ -744,7 +744,7 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 | 要求 | 状态 |
 |:--|:--|
 | `package.json` 声明 `dsh.bundle`（含 `patch`） | ✅ `"bundle": { "patch": "./cordis.patch.yml" }`，且 `cordis.patch.yml` 在仓库根 |
-| 真实可用的代码（非占位/纯 README） | ✅ 132 条静态自检 + 7 套端到端测试全部通过 |
+| 真实可用的代码（非占位/纯 README） | ✅ 132 条静态自检 + 6 套端到端/冒烟测试全部通过 |
 | 仓库创建满 1 天 | ⏳ 建于 `2026-11-03T11:34Z`，`2026-11-04T11:34Z` 之后达标（CI 自动判定，代码无需改动） |
 | 添加 `dsh-plugin` topic | ✅ 已添加（另有 `desktop-pet`、`cordis-plugin`、`deepseek-harness`） |
 | 描述只讲功能、不夸大 | ✅ 描述里的「6 个工具」用 `test-entry.cjs` 对着 `index.js` 数过，QQ/抖音也各有一条断言 |
