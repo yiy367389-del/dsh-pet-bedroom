@@ -1,0 +1,42 @@
+# 变更记录
+
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+## [2.0.0] - 2026-11-03
+
+首个开源准备版本（脱敏通用版）。
+
+### 新增
+
+- 通用配置项：`petRoute`、`petId`、`vaultDir`、`notesDir`、`chatService`、
+  `chatDataDir`、`chatApiBase`、`douyinApiBase`、`douyinEnabled`、`allowAgentWrite`、`roomFile`。
+- 环境变量：`BEDROOM_PET_ROUTE`、`BEDROOM_VAULT_DIR`、`BEDROOM_CHAT_DIR`（兼容 `AURABOT_DATA_DIR`）。
+- `test-config.mjs`：验证自定义宠物路由、聊天服务、抖音基地址真的生效。
+- README：面向所有读者的安装、配置、接入说明，明确列出对 dsh-pet 的引用范围。
+
+### 变更
+
+- QQ 与抖音从「写死 Aurabot」改为「按契约接入，默认适配 Aurabot」。
+- 默认记忆库路径改为 `$DSH_HOME/memory-vault`，不再指向任何个人目录。
+- 默认笔记目录改为 `notes`，可用 `notesDir` 指向任意目录。
+- 包名从 `@local/dsh-pet-bedroom` 改为 `dsh-pet-bedroom`。
+- 全部测试脚本中的示例昵称、QQ 号、群号替换为虚构值。
+- 辅助脚本（预览、Playwright 可视验证、椅子生成/配准）改为相对路径与
+  可配置的 `PLAYWRIGHT_CORE`，不再依赖作者本机路径。
+
+### 移除
+
+- 仓库内的个人路径、私人记忆库名称、真实聊天内容与群名。
+
+### 保留
+
+- v3 的独立网页架构：不在 DSH 应用里挂任何浮层/遮罩。
+- 房间交互、桌宠姿态、椅子前景遮挡、手机界面、拨号盘、壁纸、家具、工具集。
+- 对 dsh-pet 的引用方式：只读它的 `/config` 与 `/thumb`，不改它一行代码。
+
+## 历史（原作者环境，未纳入本仓库提交）
+
+- v1：概念稿。
+- v2：全屏浮层方案，已废弃（隐藏态遮罩仍拦截点击）。
+- v3：独立网页 + 真实日记/聊天流水 + 手机界面。
