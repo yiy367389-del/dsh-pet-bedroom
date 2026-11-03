@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "title": "桌宠卧室",
+    "description": "给桌宠盖一间它自己的卧室：能睡觉的床、能上网的电脑桌、窗外是海边的风景，还有一部会自己响的手机——QQ 收到的命令，桌宠会在卧室里照着做。"
+  },
+  "ui": {
+    "title": "桌宠卧室",
+    "subtitle": "在这里看它睡觉、玩电脑、收手机消息",
+    "open": "进卧室",
+    "close": "出门",
+    "sleep": "去睡觉",
+    "wake": "叫醒它",
+    "desk": "去电脑桌",
+    "phone": "看手机",
+    "idle": "随便走走",
+    "window": "看看窗外",
+    "screenOff": "手机屏幕是灭的",
+    "screenOn": "手机屏幕亮了",
+    "booting": "正在把宠物搬进卧室…",
+    "noPet": "还没找到桌宠：请先装好 dsh-pet 并在设置里打开显示。",
+    "petMissing": "没能读到桌宠素材（dsh-pet 可能没在运行）。",
+    "feed": "手机",
+    "commandLabel": "来自 QQ 的命令",
+    "douyinRunning": "正在刷抖音",
+    "douyinIdle": "没在刷",
+    "mute": "安静",
+    "unmute": "撤销静音"
+  },
+  "commands": {
+    "sleep": "睡觉",
+    "wake": "起床",
+    "desk": "去电脑桌",
+    "phone": "看手机",
+    "douyin": "刷抖音",
+    "stop": "别刷了",
+    "window": "看窗外",
+    "idle": "自由活动"
+  }
+}

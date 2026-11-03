@@ -1,0 +1,41 @@
+{
+  "name": "dsh-pet-bedroom",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "桌宠卧室：一个独立网页，用房间图当整个房间，dsh-pet 的桌宠在里面自由活动；桌上有它真实的日记与读书笔记，可切换时辰与天气。QQ 与抖音是可选接入的外部能力，需要接你自己的后端。",
+  "icon": "icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "web/index.html",
+    "assets/room.png",
+    "assets/chair.png",
+    "assets/wall/pine.jpg",
+    "assets/wall/azure.jpg",
+    "assets/wall/haze.jpg",
+    "assets/wall/dusk.jpg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-connection"
+      ]
+    }
+  }
+}

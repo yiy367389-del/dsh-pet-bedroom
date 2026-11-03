@@ -1,0 +1,20 @@
+# 依赖
+node_modules/
+pnpm-store/
+
+# 运行时与临时产物
+*.log
+.DS_Store
+Thumbs.db
+
+# 本地验证产物（Playwright 截图、椅子配准中间图）
+_dial/
+_wpv/
+_rc/
+_chair-stitch.png
+_chair-mask.png
+_new-chair.png
+
+# 编辑器
+.vscode/
+.idea/

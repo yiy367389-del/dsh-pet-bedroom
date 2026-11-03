@@ -1,0 +1,18 @@
+# dsh-pet-bedroom —— 给桌宠盖一间卧室。
+#
+# 这是一个**独立插件**：dsh-pet 本体一行都不用改。
+#   · 素材：卧室里的桌宠直接播 dsh-pet 已经对外开着的动画素材
+#     （GET <petRoute>/thumb/<素材根>/<动画名>.webm，出厂 petRoute=/dsh-pet-7340），
+#     所以看到的是同一只宠物。
+#   · 交互：卧室自己的宿主半侧负责收 QQ 消息、触发你自己的刷抖音接口。
+#   · QQ 与抖音都不是本插件自带的：默认适配 Aurabot，没有它时对应模块显示「未接入」。
+#
+# 安装方式（二选一）：
+#   1. 作为本地 link 包写进你的 DSH profile 的 package.json（dependencies + bundles）；
+#   2. 发布到 npm 后按普通插件安装。
+#
+# id 必须全局唯一，裸名（bedroom）容易撞车，这里用包名同款。
+# 注意：id 那一行不能写行尾注释，否则商城预检抓不到 entry ID。
+- insert:
+    - id: dsh-pet-bedroom
+      name: 'dsh-pet-bedroom'

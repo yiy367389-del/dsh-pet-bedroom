@@ -1,0 +1,1754 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>桌宠卧室</title>
+<!--
+  独立网页版卧室。
+  参考图直接当整个房间用（web/room.png），交互叠在图上。
+  这里没有「全屏浮层」：页面本身就是普通文档流，右侧详情栏只是固定宽度的小卡片，
+  不存在关闭态还占着整屏的透明层。指针只被真正的控件吃掉。
+-->
+<style>
+:root{
+  --ink:#1b2c46; --ink2:#4a5d78; --ink3:#6b7f99;
+  --line:#dbe8f7; --card:rgba(255,255,255,.96);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:#0b1220; color:var(--ink);
+  font:500 14px/1.6 "Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  overflow:hidden;
+}
+
+/* ---------- 布局：左舞台 + 右侧栏 ---------- */
+.app{display:flex;height:100vh;gap:0}
+.stage-wrap{
+  position:relative;flex:1 1 auto;min-width:0;
+  display:flex;align-items:center;justify-content:center;
+  padding:16px;
+}
+.stage{
+  position:relative;width:100%;max-width:1400px;aspect-ratio:1536/1024;
+  border-radius:20px;overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.08) inset;
+}
+.room{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;
+  user-select:none;-webkit-user-drag:none}
+
+/* ---------- 时辰 / 天气 色调 ---------- */
+.tint{position:absolute;inset:0;pointer-events:none;transition:background 1.2s ease,opacity 1.2s ease;mix-blend-mode:multiply}
+.stage[data-time="dawn"] .tint{background:rgba(255,214,170,.20)}
+.stage[data-time="noon"] .tint{background:rgba(255,255,255,0)}
+.stage[data-time="afternoon"] .tint{background:rgba(255,176,120,.26)}
+.stage[data-time="night"] .tint{background:rgba(26,44,92,.55)}
+
+.sheen{position:absolute;inset:0;pointer-events:none;transition:background 1.2s ease}
+.stage[data-time="night"] .sheen{background:radial-gradient(70% 50% at 62% 30%,rgba(120,170,255,.18),transparent 70%)}
+.stage[data-time="dawn"] .sheen{background:radial-gradient(60% 45% at 20% 20%,rgba(255,226,180,.22),transparent 70%)}
+
+/* ---------- 家具热点：只占自己那一小块 ---------- */
+/* 家具热点：只负责「热区」，**不画任何框**。
+   曾经 hover 时画了一层蓝色透明矩形，很丑而且破坏画面——去掉。
+   指针仍然是手型，详情走右侧卡片，视觉上房间保持干净。 */
+.hot{position:absolute;cursor:pointer;outline:none;background:transparent;
+  border:none;border-radius:10px}
+/* 键盘可达性：只有用 Tab 聚焦时才留一个极淡的提示，鼠标用户完全看不到 */
+.hot:focus-visible{box-shadow:0 0 0 2px rgba(160,205,255,.45) inset;border-radius:10px}
+
+/* 容器负责「位置」，video 负责「姿态」——两者分开做 transform，
+   否则 translateX(-50%) 会和 rotate/scale 互相覆盖。
+   注意 pointer-events:none：素材画布四周全是透明留白，容器又给到 77% 宽，
+   如果容器能接收指针，那层看不见的大方块会把床、桌子等热点全部挡住。
+   真正可点的只有「角色实体那一块」，见 .pet .hit。 */
+.pet{position:absolute;pointer-events:none;cursor:pointer;
+  transform-origin:50% 100%;will-change:left,bottom,width,z-index;transition:filter .2s}
+/* 素材是 640×360 的透明画布，角色实体只占**宽度中段 33.8%、高度 16.7%~91.7%**，
+   四周全是透明留白。所以容器宽度要按 1/0.338 ≈ 2.96 倍去给，
+   否则会出现「设了 25% 宽、画出来只有 8%」的错觉——这正是之前显得太小的原因。 */
+.pet video{display:block;width:100%;height:auto;pointer-events:none;
+  filter:drop-shadow(0 14px 16px rgba(10,30,60,.45));transition:opacity .2s ease;
+  transform-origin:50% 100%}
+/* 命中区：只覆盖角色实体那一块（按画布 33.1%~66.9% × 16.7%~91.7% 换算），
+   点宠物才有效，点它周围的透明处会穿透到下面的家具。 */
+.pet .hit{position:absolute;left:33.1%;top:16.7%;width:33.8%;height:75%;
+  pointer-events:auto;cursor:pointer}
+/* 坐姿：坐下时整个人**往椅子方向压下去**，头顶不盖显示器。
+   注意：只缩不放——不裁下半身，腿自然被桌子挡住就够了。 */
+.pet.sit:not(.lie) video{
+  transform:translateY(16%);
+  clip-path:none;
+  transform-origin:50% 100%;
+}
+/* 背面：交给 dsh-pet 自己的「小幅度原地360度旋转展示」动画来演
+   （旋转到背面时就是背对镜头），CSS 这里只做整体略缩，
+   绝不 scaleX 翻转、也不裁下半身——用户明确要求过不能切腿。 */
+.pet.back:not(.lie) video{
+  transform:translateY(2%);
+  clip-path:none;
+  transform-origin:50% 100%;
+}
+/* 躺平：**先平移再旋转**（顺序要紧！写成 rotate 在前，translate 会落在旋转后的
+   坐标系里，人就会横着飘到墙上——这个坑踩过一次）。
+   正角度 = 顺时针，于是头朝右、脚朝左（用户要求的方向）。
+   躺姿不缩小，只转过来，所以和站着时一样大。 */
+.pet.lie video{
+  transform: translateX(8%) translateY(13%) rotate(72deg);
+  clip-path:none;
+  transform-origin:50% 50%;
+  transition:transform .7s cubic-bezier(.2,.9,.25,1);
+}
+.pet .shadow{transition:opacity .4s}
+.pet.lie .shadow{opacity:0}
+/* 椅子前景：她坐电脑前时盖在她后背上，制造「人坐在椅子前面」的遮挡关系。
+   坐标是把用户给的 357×637 椅子图**配准**到 room.png 上算出来的
+   （FFT 互相关搜缩放+偏移，IoU 0.929）：left 70.833% / top 43.359% /
+   width 8.138% / height 21.777%。与房间图同一个坐标系，所以严丝合缝。
+   z-index 要高于桌宠（桌宠是 55+spot.y，最大约 137），低于气泡（190）。 */
+.chair-front{position:absolute;left:70.833%;top:43.359%;
+  width:8.138%;height:21.777%;
+  pointer-events:none;z-index:150;display:none;
+  /* 自成层叠上下文：里面的 multiply 只和椅子图混，不会把房间也乘一遍 */
+  isolation:isolate;
+  transition:opacity .25s ease}
+.chair-front.on{display:block}
+.chair-front img{display:block;width:100%;height:100%;object-fit:fill}
+/* 椅子也要跟着时辰变暗/变暖。
+   为什么不能只靠 z-index 排在 .tint 下面：椅子必须盖在桌宠上面，
+   而 .tint 在桌宠下面（z-index auto），排不出「桌宠 < 椅子 < 色调」这个序。
+   所以给椅子**再叠一层同色的 .tint**，用椅子图自己的 alpha 当遮罩，
+   这样乘出来的颜色和房间那层完全一致，透明处也不会糊成一个方块。
+   （.sheen 不跟：它是按舞台百分比定位的径向渐变，放进椅子这个小框里会算错位置。） */
+.chair-front .tint{
+  -webkit-mask-image:url(./chair.png);mask-image:url(./chair.png);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+/* 趴到窗边 / 凑近看植物：只前倾，**不放大**（以前 scale(.95) 让它比坐着大一圈） */
+.pet.lean video{transform:rotate(-6deg);transform-origin:50% 100%}
+
+/* 气泡：挂在舞台层（不是桌宠容器），位置由 JS 每帧跟着角色头顶写 left/bottom，
+   这样走到桌边、床边都不会被容器或舞台顶边裁掉。 */
+.bubble{position:absolute;left:50%;bottom:30%;transform:translate(-50%,0) scale(.94);
+  width:max-content;max-width:250px;padding:9px 13px;border-radius:14px;
+  background:#fff;border:1px solid rgba(120,160,210,.45);
+  font:500 13px/1.5 "Microsoft YaHei",system-ui;color:#21324a;
+  box-shadow:0 14px 30px rgba(20,50,90,.24);
+  opacity:0;transition:opacity .2s ease,transform .2s ease;
+  pointer-events:none;text-align:center;z-index:190}
+.bubble.show{opacity:1;transform:translate(-50%,-6px) scale(1)}
+.bubble::after{content:"";position:absolute;left:50%;bottom:-6px;width:12px;height:12px;
+  transform:translateX(-50%) rotate(45deg);background:inherit;
+  border-right:1px solid rgba(120,160,210,.45);border-bottom:1px solid rgba(120,160,210,.45)}
+
+/* ---------- 天气粒子 ---------- */
+/* 天气粒子：只落在房间画面里。舞台是 1536×1024 的图，粒子容器就用同一块
+   区域（不铺到整个 stage 的黑边上），否则雪会下在画框外面。 */
+.weather{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:40;
+  clip-path:inset(0 0 0 0);border-radius:20px}
+.drop{position:absolute;top:-10%;width:1.5px;height:16px;border-radius:1px;
+  background:linear-gradient(180deg,rgba(200,230,255,0),rgba(190,225,255,.9));
+  animation:rain linear infinite}
+@keyframes rain{to{transform:translateY(115vh)}}
+.flake{position:absolute;top:-6%;border-radius:50%;background:rgba(255,255,255,.95);
+  box-shadow:0 0 6px rgba(255,255,255,.8);animation:snow linear infinite}
+@keyframes snow{to{transform:translate(30px,110vh) rotate(260deg)}}
+
+/* ---------- 顶部条 ---------- */
+.topbar{position:absolute;left:0;right:0;top:0;display:flex;align-items:flex-start;
+  gap:10px;padding:14px 16px;z-index:80;pointer-events:none;
+  background:linear-gradient(180deg,rgba(8,16,30,.55),transparent)}
+.topbar .ttl{font:800 16px/1.25 "Microsoft YaHei",system-ui;color:#f2f8ff;
+  text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.topbar .sub{margin-top:4px;font-size:11.5px;color:rgba(226,238,255,.78)}
+.grow{flex:1 1 auto}
+.row{display:flex;gap:6px;align-items:center;pointer-events:auto}
+
+button{font:600 12px/1 "Microsoft YaHei",system-ui;cursor:pointer;
+  border-radius:999px;padding:7px 12px;color:#eaf4ff;
+  background:rgba(20,32,50,.72);border:1px solid rgba(255,255,255,.18);
+  backdrop-filter:blur(8px);transition:background .16s,transform .16s}
+button:hover{background:rgba(56,84,120,.94);transform:translateY(-1px)}
+button.on{background:linear-gradient(140deg,#6fb4ff,#3f7fe0);border-color:transparent;
+  box-shadow:0 6px 18px rgba(70,140,230,.45)}
+button.primary{background:linear-gradient(140deg,#ff7aa8,#b355ff);border-color:transparent}
+button.danger{background:rgba(140,40,64,.85);border-color:rgba(255,130,160,.45)}
+button[disabled]{opacity:.45;cursor:not-allowed;transform:none}
+.seg{display:flex;gap:4px;padding:3px;border-radius:999px;
+  background:rgba(16,26,40,.62);border:1px solid rgba(255,255,255,.1)}
+.seg button{padding:6px 9px;background:transparent;border-color:transparent}
+.seg button.on{background:linear-gradient(140deg,#6fb4ff,#3f7fe0)}
+
+/* 退出卧室：和「刷抖音」一样醒目，但走中性色，不抢戏 */
+button.exit{background:rgba(30,44,64,.86);border-color:rgba(150,190,235,.45);color:#cfe3ff}
+button.exit:hover{background:rgba(52,78,110,.96);color:#fff}
+
+/* 右键动作菜单：贴在被点的位置，列表本身可滚 */
+.ctxmenu{position:absolute;display:none;z-index:200;min-width:186px;max-height:58%;
+  overflow:auto;padding:6px;border-radius:12px;
+  background:rgba(18,28,44,.97);border:1px solid rgba(150,190,235,.32);
+  box-shadow:0 18px 46px rgba(0,0,0,.55);backdrop-filter:blur(10px)}
+.ctxmenu.open{display:block}
+.ctxmenu .hd{padding:6px 9px 7px;font:700 11px/1.3 "Microsoft YaHei",system-ui;
+  color:#8fb2d8;border-bottom:1px solid rgba(150,190,235,.18);margin-bottom:4px}
+.ctxmenu .it{padding:7px 10px;border-radius:8px;cursor:pointer;
+  font:500 12.5px/1.35 "Microsoft YaHei",system-ui;color:#e6f1ff;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.ctxmenu .it:hover{background:rgba(90,150,225,.34)}
+.ctxmenu .it.on{background:rgba(90,150,225,.5)}
+
+/* ---------- 右侧栏 ---------- */
+.side{flex:0 0 330px;display:flex;flex-direction:column;gap:12px;
+  padding:16px 16px 16px 0;overflow:auto}
+.card{background:var(--card);border-radius:16px;padding:14px 16px;
+  border:1px solid rgba(140,180,225,.55);box-shadow:0 14px 34px rgba(8,24,46,.3)}
+.card h3{margin:0 0 8px;font:800 13px/1.3 "Microsoft YaHei",system-ui;color:var(--ink);
+  display:flex;align-items:center;gap:7px}
+.card p{margin:0;font-size:12.5px;line-height:1.7;color:var(--ink2)}
+.card .muted{color:var(--ink3);font-size:12px}
+.tag{display:inline-block;font:600 11px/1 "Microsoft YaHei",system-ui;
+  padding:5px 9px;border-radius:999px;background:rgba(120,175,240,.16);color:#37618f;margin:3px 4px 0 0}
+
+/* 详情卡：没有 hover 时不占屏幕 */
+.detail{display:none}
+.detail.show{display:block}
+
+/* 文档条目 */
+.doc{padding:10px 12px;border-radius:12px;border:1px solid var(--line);
+  background:#fbfdff;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.doc+.doc{margin-top:8px}
+.doc:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(16,42,74,.16)}
+.doc .h{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.doc .t{font:800 12.5px/1.35 "Microsoft YaHei",system-ui;color:var(--ink)}
+.doc .m{font-size:10.5px;color:var(--ink3);flex:0 0 auto}
+.doc .p{margin-top:5px;font-size:11.5px;line-height:1.6;color:var(--ink2);
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.doc .mood{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);
+  font-size:11.5px;color:var(--ink3)}
+
+/* ---------- 手机：真的做成一台手机 ---------- */
+.phone{display:flex;justify-content:center;margin:2px 0 10px}
+.phone-body{
+  position:relative;width:212px;height:404px;border-radius:26px;
+  background:linear-gradient(160deg,#2a3648,#141c28);
+  padding:7px;box-shadow:0 14px 34px rgba(10,26,48,.42),0 0 0 1px rgba(255,255,255,.09) inset;
+  clip-path:inset(0 round 26px);
+}
+.phone-notch{position:absolute;left:50%;top:7px;transform:translateX(-50%);
+  width:62px;height:14px;border-radius:0 0 10px 10px;background:#0d131d;z-index:3}
+/* 屏幕圆角是**一处定义、每层各用一次**。
+   踩过的坑：只给 .phone-screen 写 border-radius+overflow:hidden，里面的
+   .ph-home / .ph-dial 这些 inset:0 的浅色全屏层自己不带圆角。浏览器合成器
+   一旦把父级的裁剪丢掉（Electron 里常见，切层/重绘时尤其明显），浅色层就
+   从圆角里漏出四个直角。所以每一层都自己圆角 + 自己 overflow:hidden，
+   就算父级裁剪失效也看不出来。 */
+.phone-screen{
+  --ph-r:20px;
+  position:relative;width:100%;height:100%;border-radius:var(--ph-r);overflow:hidden;
+  /* clip-path 是第二道保险：它和 border-radius 走不同的合成路径 */
+  clip-path:inset(0 round var(--ph-r));
+  background:#0f1621;color:#e9f1fb;
+  font:500 11px/1.45 "Microsoft YaHei",system-ui;
+}
+.phone-homebar{position:absolute;left:50%;bottom:11px;transform:translateX(-50%);
+  width:64px;height:4px;border-radius:3px;background:rgba(255,255,255,.4);z-index:3}
+
+.phone-status{display:flex;justify-content:space-between;align-items:center;
+  padding:5px 12px 3px;font:600 9.5px/1 system-ui;color:#b9c9dd}
+.ph-right{letter-spacing:1px}
+
+/* 每个 inset:0 的全屏层都自己圆角（理由见 .phone-screen 上的注释）。
+   共用一个变量 --ph-r，改一处就全改。 */
+.ph-home,.ph-dial,.ph-qq,.ph-chat{
+  border-radius:var(--ph-r,20px);overflow:hidden;
+  clip-path:inset(0 round var(--ph-r,20px));
+}
+
+/* 桌面 */
+.ph-home{position:absolute;inset:0;padding-top:22px;
+  background:radial-gradient(120% 80% at 20% 0%,#28456b,#0f1621 62%);
+  display:flex;flex-direction:column}
+/* 真实照片壁纸。上面压一层暗色渐变，保证白字和白图标在亮照片上也读得清。 */
+.ph-wall{position:absolute;inset:0;background-size:cover;background-position:center;
+  z-index:0;transition:opacity .28s}
+.ph-wall::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(6,12,22,.42),rgba(6,12,22,.16) 34%,rgba(6,12,22,.5))}
+/* 只把「正常流」里的子元素抬到壁纸上面；.ph-wall 自己是绝对定位，
+   不能被改成 relative，否则 inset:0 失效、高度塌成 0（踩过）。 */
+.ph-home>.ph-apps,.ph-home>.ph-dock{position:relative;z-index:1}
+.ph-apps{display:grid;grid-template-columns:repeat(4,1fr);gap:11px 6px;padding:12px 12px 0}
+.ph-app{display:flex;flex-direction:column;align-items:center;gap:5px;
+  background:none;border:none;padding:0;cursor:default;color:#dce8f6}
+.ph-app .ico{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+  font:800 15px/1 system-ui;color:#fff;box-shadow:0 4px 10px rgba(0,0,0,.35)}
+.ph-app .nm{font:600 8.5px/1 system-ui;color:#cfdcec;white-space:nowrap}
+.ph-app.off{opacity:.62}
+.ph-app.off .ico{filter:grayscale(.5)}
+.ph-app .badge{position:absolute;transform:translate(15px,-13px);
+  min-width:14px;height:14px;border-radius:8px;background:#f2483c;color:#fff;
+  font:800 8.5px/14px system-ui;text-align:center;padding:0 3px}
+.ph-app.live{cursor:pointer}
+.ph-app.live:active .ico{transform:scale(.93)}
+.ph-dock{margin-top:auto;margin-bottom:12px;display:flex;justify-content:center;gap:9px}
+/* dock 里的图标：和桌面图标同一套视觉，但小一号 */
+.ph-dock .ph-app .ico{width:32px;height:32px;border-radius:9px;font-size:14px}
+.ph-dock .ph-app .nm{font-size:8px}
+
+/* ---------- 拨号 ---------- */
+.ph-dial{position:absolute;inset:0;padding-top:20px;background:#f2f5f9;
+  color:#1a2432;display:none;flex-direction:column}
+.ph-dial.on{display:flex}
+.ph-numshow{flex:0 0 auto;padding:7px 10px;text-align:center;
+  font:800 15px/1.3 "Microsoft YaHei",system-ui;color:#1a2432;
+  letter-spacing:1.5px;min-height:30px;word-break:break-all}
+.ph-numshow.ph-placeholder{color:#a9b6c6;font-weight:600;font-size:11px;letter-spacing:0}
+.ph-keys{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:0 12px}
+.ph-key{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:32px;border-radius:9px;border:none;cursor:pointer;background:#fff;
+  box-shadow:0 1px 2px rgba(16,40,70,.10);color:#1a2432}
+.ph-key:active{background:#e4ecf6}
+.ph-key .d{font:800 13px/1 system-ui}
+.ph-key .s{font:600 6.5px/1 system-ui;color:#93a2b4;letter-spacing:.6px;margin-top:1px}
+.ph-dialbtns{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:12px;padding:7px 0 5px}
+.ph-call{width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;
+  background:#22a35a;color:#fff;font-size:17px;line-height:1;
+  box-shadow:0 4px 10px rgba(20,110,60,.35)}
+.ph-call:active{transform:scale(.94)}
+.ph-del{width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;
+  background:#e6ecf4;color:#5d6d80;font-size:14px}
+.ph-del:active{background:#d8e2ee}
+.ph-contacts-h{flex:0 0 auto;padding:3px 12px 3px;
+  font:700 9px/1.4 "Microsoft YaHei",system-ui;color:#7b8899}
+.ph-contacts{flex:1;overflow-y:auto;background:#fff;border-top:1px solid #dbe3ec}
+.ph-contact{display:flex;align-items:center;gap:7px;padding:7px 10px;
+  border-bottom:1px solid #eef1f5;cursor:pointer}
+.ph-contact:active{background:#eaf1fa}
+.ph-contact .ph-av{flex:0 0 26px;height:26px;border-radius:7px}
+.ph-contact .ph-av-fb{font-size:10.5px}
+.ph-contact .nm{flex:1;font:600 10.5px/1.3 "Microsoft YaHei",system-ui;color:#1d2733;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ph-contact .qq{font:500 8.5px/1 system-ui;color:#a3b0bf}
+
+/* QQ 界面（会话列表 / 聊天） */
+.ph-qq,.ph-chat{position:absolute;inset:0;padding-top:20px;background:#f2f5f9;
+  color:#1a2432;display:none;flex-direction:column}
+.ph-qq.on,.ph-chat.on{display:flex}
+.ph-nav{display:flex;align-items:center;gap:6px;padding:5px 8px;
+  background:#eef2f7;border-bottom:1px solid #dbe3ec}
+.ph-back{border:none;background:none;font:400 19px/1 system-ui;color:#3a6ea5;
+  cursor:pointer;padding:0 4px}
+.ph-title{flex:1;text-align:center;font:800 12px/1 "Microsoft YaHei",system-ui;color:#22303f}
+.ph-spacer{width:22px}
+
+.ph-chats{flex:1;overflow-y:auto;background:#fff}
+.ph-chat-item{display:flex;gap:8px;padding:9px 10px;border-bottom:1px solid #eef1f5;cursor:pointer}
+.ph-chat-item:active{background:#eaf1fa}
+.ph-av{flex:0 0 30px;height:30px;border-radius:8px;display:grid;place-items:center;
+  overflow:hidden;background:#5b8fd6}
+/* 真实头像；加载失败就隐藏，露出下面的首字母块 */
+.ph-av-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:8px}
+.ph-av-fb{width:100%;height:100%;display:grid;place-items:center;
+  font:800 12px/1 system-ui;color:#fff;background:#5b8fd6}
+.ph-ci{min-width:0;flex:1}
+.ph-ci .r1{display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+.ph-ci .nm{font:800 11px/1.3 "Microsoft YaHei",system-ui;color:#1d2733;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ph-ci .tm{font:500 8.5px/1 system-ui;color:#9aa8b8;flex:0 0 auto}
+.ph-ci .last{margin-top:2px;font:400 10px/1.35 "Microsoft YaHei",system-ui;color:#7b8899;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ph-unread{flex:0 0 auto;align-self:center;min-width:15px;height:15px;border-radius:8px;
+  background:#f2483c;color:#fff;font:800 9px/15px system-ui;text-align:center;padding:0 3px}
+
+.ph-msgs{flex:1;overflow-y:auto;padding:9px 8px;background:#eef2f7;
+  display:flex;flex-direction:column;gap:7px}
+/* 一条消息 = 头像 + 气泡。对方的头像在左，自己那侧不摆头像（同手机 QQ） */
+.ph-row{display:flex;align-items:flex-start;gap:5px;max-width:100%}
+.ph-row.them{align-self:flex-start}
+.ph-row.me{align-self:flex-end;justify-content:flex-end}
+.ph-rowav{flex:0 0 22px;height:22px;border-radius:6px;overflow:hidden;
+  display:grid;place-items:center;background:#5b8fd6;margin-top:1px}
+.ph-rowav .ph-av-img,.ph-rowav .ph-av-fb{width:100%;height:100%;border-radius:6px;
+  font:800 9.5px/1 system-ui;color:#fff;display:grid;place-items:center}
+.ph-msg{max-width:76%;padding:6px 9px;border-radius:10px;font:400 10.5px/1.5 "Microsoft YaHei",system-ui;
+  word-break:break-word}
+.ph-msgwrap{max-width:76%;display:flex;flex-direction:column}
+/* 群聊里标出发言人（私聊不显示） */
+.ph-who{display:block;margin-bottom:2px;font:700 8.5px/1.2 "Microsoft YaHei",system-ui;
+  color:#6d86a3;letter-spacing:.2px}
+.ph-msg.them{background:#fff;color:#1c2733;border-top-left-radius:3px}
+.ph-msg.me{background:#95ec69;color:#12301c;border-top-right-radius:3px}
+.ph-msg .tt{display:block;margin-top:3px;font:400 8px/1 system-ui;opacity:.55}
+.ph-msg.raw{background:none;color:#9aa8b8;align-self:center;font-size:9.5px}
+.ph-empty{padding:22px 12px;text-align:center;color:#9aa8b8;
+  font:400 10px/1.6 "Microsoft YaHei",system-ui}
+
+.ph-note{margin-top:2px}
+
+/* 底部工具条 */
+.bottom{position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;
+  padding:12px 16px;z-index:80;
+  background:linear-gradient(0deg,rgba(8,16,30,.62),transparent)}
+input[type=text]{flex:1 1 auto;min-width:100px;padding:8px 12px;border-radius:999px;
+  background:rgba(16,26,40,.78);border:1px solid rgba(255,255,255,.16);color:#eaf4ff;
+  font:500 12.5px/1 "Microsoft YaHei",system-ui;outline:none}
+input[type=text]:focus{border-color:rgba(150,200,255,.65)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
+  background:rgba(16,26,40,.74);border:1px solid rgba(255,255,255,.14);
+  color:rgba(232,242,255,.88);font-size:11.5px;max-width:46%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:#7be3a5;
+  box-shadow:0 0 8px rgba(123,227,165,.9);flex:0 0 auto}
+.dot.warn{background:#ffc857;box-shadow:0 0 8px rgba(255,200,87,.9)}
+.dot.bad{background:#ff6b81;box-shadow:0 0 8px rgba(255,107,129,.9)}
+
+/* 阅读器：opened 才存在，关闭即移除 */
+.reader{position:fixed;inset:0;z-index:200;display:flex;align-items:center;
+  justify-content:center;background:rgba(8,14,24,.62);backdrop-filter:blur(5px)}
+.sheet{width:min(720px,92vw);max-height:82vh;display:flex;flex-direction:column;
+  background:#fdfefe;border-radius:18px;overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.sheet header{display:flex;align-items:center;gap:10px;padding:14px 18px;
+  border-bottom:1px solid var(--line)}
+.sheet header .t{font:800 14px/1.3 "Microsoft YaHei",system-ui;color:var(--ink)}
+.sheet header .x{margin-left:auto;width:30px;height:30px;padding:0;border:none;
+  border-radius:999px;background:#eef5ff;color:#4a6b96;font:700 15px/1 system-ui}
+.sheet pre{margin:0;padding:18px;overflow:auto;flex:1;white-space:pre-wrap;
+  word-break:break-word;font:500 12.5px/1.8 "Microsoft YaHei",system-ui;color:#33465e}
+
+@media (max-width:1080px){
+  .side{flex-basis:270px}
+}
+@media (max-width:860px){
+  body{overflow:auto}
+  .app{flex-direction:column;height:auto}
+  .side{flex:1 1 auto;padding:0 16px 16px}
+  .stage-wrap{padding:10px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage-wrap">
+    <div class="stage" id="stage" data-time="noon">
+      <img class="room" id="roomImg" src="./room.png" alt="桌宠卧室">
+      <!-- 图上不来时**不许留一片黑**：给出明确原因，而不是让用户对着黑屏猜 -->
+      <div id="fatal" style="display:none;position:absolute;inset:0;z-index:300;
+        align-items:center;justify-content:center;padding:30px;
+        background:#0d1522;color:#e8f2ff;text-align:center;
+        font:500 14px/1.9 'Microsoft YaHei',system-ui">
+        <div>
+          <div style="font:800 17px/1.5 'Microsoft YaHei',system-ui;margin-bottom:10px">房间图没加载出来</div>
+          <div id="fatalMsg" style="color:#9fb6d4;max-width:560px"></div>
+          <div style="margin-top:14px;color:#7b93b3;font-size:12.5px">
+            确认插件目录下的 <code>assets/room.png</code> 存在后刷新页面。
+          </div>
+        </div>
+      </div>
+      <div class="tint"></div>
+      <div class="sheen"></div>
+
+      <!-- 家具热点：JS 按数据生成，位置是图上的百分比 -->
+      <div id="hots"></div>
+
+      <!-- 桌宠：宽度由 JS 按进深与素材内容占比换算，
+           角色实体约占舞台 23%，是房间主角的体量。 -->
+      <div class="pet" id="pet" style="left:48%;bottom:22%;width:41.4%">
+        <div class="shadow"></div>
+        <video id="video" muted loop playsinline autoplay preload="auto" style="opacity:0"></video>
+        <!-- 只有这一小块接收点击（角色实体范围），周围透明处穿透给家具 -->
+        <div class="hit" id="petHit" role="button" tabindex="0" aria-label="桌宠"></div>
+      </div>
+
+      <!-- 椅子前景层：她坐到电脑桌前时，椅子要挡住她后背的一部分。
+           图是从 room.png 上原样抠下来的椅子（同一张图、同一个坐标系，
+           坐标靠配准算出来，IoU 0.929），所以对上去是像素级无缝。
+           平时 display:none，只有 back 姿态才出现。
+           里面那层 .tint 是**给椅子自己的色调**：椅子盖在桌宠上面，
+           排不到房间那层 .tint 下面，所以得自己再乘一遍，否则切时辰时
+           房间暗了、椅子还是亮的，看着像贴上去的。 -->
+      <div class="chair-front" id="chairFront">
+        <img src="./chair.png" alt="">
+        <div class="tint"></div>
+      </div>
+
+      <!-- 气泡挂在舞台层，不挂在桌宠容器里：容器只有 66% 宽且会跟着走动，
+           气泡跟着它会被舞台顶边裁掉（坐在桌前时已经踩到过）。 -->
+      <div class="bubble" id="bubble"></div>
+
+      <div class="weather" id="weather"></div>
+
+      <div class="topbar">
+        <div>
+          <div class="ttl">桌宠的卧室</div>
+          <div class="sub" id="sub">加载中…</div>
+        </div>
+        <div class="grow"></div>
+        <div class="row">
+          <div class="seg" id="segTime"></div>
+          <div class="seg" id="segWeather"></div>
+          <button id="btnAuto" title="跟着真实时间走">自动</button>
+        </div>
+        <div class="row">
+          <!-- 「现在刷一轮」打的是你自己的抖音后端（默认适配 Aurabot 刷抖音模块）：
+               POST <douyinApiBase>/douyin/run。没有后端时只会如实说没接上。 -->
+          <button id="btnDouyin" class="primary" title="触发你自己的抖音后端「刷一轮」动作">现在刷一轮</button>
+          <button id="btnStop" class="danger">别刷了</button>
+          <!-- 退出卧室：回到 DSH 主界面。用户点「卧室」进来后没有返回按钮，
+               只能靠浏览器后退——这里补一个明确的出口。 -->
+          <button id="btnExit" class="exit" title="回到 DeepSeek Harness 主界面">⌂ 离开卧室</button>
+        </div>
+      </div>
+
+      <div class="bottom">
+        <span class="chip" id="chip"><span class="dot"></span><span id="chipText">抖音状态未知</span></span>
+        <input type="text" id="say" placeholder="给它的手机发一句（例：去刷抖音 / 睡觉 / 写日记）">
+        <button id="btnSend">发送</button>
+      </div>
+
+      <!-- 右键菜单：选动画演示（数据来自 dsh-pet 的完整动画池） -->
+      <div class="ctxmenu" id="ctxmenu" role="menu" aria-label="动作演示"></div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <div class="card detail" id="detail">
+      <h3 id="detailTitle">家具</h3>
+      <p id="detailText"></p>
+      <div id="detailTags"></div>
+    </div>
+
+    <div class="card">
+      <h3>📔 桌上的日记</h3>
+      <div id="diaryBox"><p class="muted">桌上还没有日记。</p></div>
+    </div>
+
+    <div class="card">
+      <h3>📖 读书笔记</h3>
+      <div id="noteBox"><p class="muted">书架上还没有读书笔记。</p></div>
+    </div>
+
+    <div class="card">
+      <h3>📱 手机</h3>
+      <!-- 一台真的手机：有屏幕、有状态栏、有桌面图标。
+           只有 QQ 能点进去（里面是聊天服务记下的真实聊天），
+           其它图标点不开——点了只会提示「没装」。 -->
+      <div class="phone" id="phone">
+        <div class="phone-body">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span id="phTime">--:--</span>
+              <span class="ph-right">📶 🔋</span>
+            </div>
+
+            <!-- 桌面 -->
+            <div class="ph-home" id="phHome">
+              <!-- 真实照片壁纸（agent 自己挑、自己换） -->
+              <div class="ph-wall" id="phWall"></div>
+              <div class="ph-apps" id="phApps"></div>
+              <!-- 底部 dock：拨号 / 浏览器 / 相机 / 信息。只有拨号能真点开。 -->
+              <div class="ph-dock" id="phDock"></div>
+            </div>
+
+            <!-- 拨号：键盘 + 联系人（联系人就是 QQ 里的好友） -->
+            <div class="ph-dial" id="phDial">
+              <div class="ph-nav">
+                <button class="ph-back" id="phDialBack" title="回到桌面">‹</button>
+                <span class="ph-title">拨号</span>
+                <span class="ph-spacer"></span>
+              </div>
+              <div class="ph-numshow" id="phNumShow">输入号码</div>
+              <div class="ph-keys" id="phKeys"></div>
+              <div class="ph-dialbtns">
+                <button class="ph-call" id="phCallBtn" title="呼叫">📞</button>
+                <button class="ph-del" id="phDelBtn" title="删除一位">⌫</button>
+              </div>
+              <div class="ph-contacts-h">联系人</div>
+              <div class="ph-contacts" id="phContacts"></div>
+            </div>
+
+            <!-- QQ：会话列表 -->
+            <div class="ph-qq" id="phQqList">
+              <div class="ph-nav">
+                <button class="ph-back" id="phQqBack" title="回到桌面">‹</button>
+                <span class="ph-title">QQ</span>
+                <span class="ph-spacer"></span>
+              </div>
+              <div class="ph-chats" id="phChats"></div>
+            </div>
+
+            <!-- QQ：聊天界面 -->
+            <div class="ph-chat" id="phChatView">
+              <div class="ph-nav">
+                <button class="ph-back" id="phChatBack" title="返回会话列表">‹</button>
+                <span class="ph-title" id="phChatTitle">聊天</span>
+                <span class="ph-spacer"></span>
+              </div>
+              <div class="ph-msgs" id="phMsgs"></div>
+            </div>
+          </div>
+          <div class="phone-homebar"></div>
+        </div>
+      </div>
+      <div id="phoneBox" class="ph-note"><p class="muted">手机上没有新消息。</p></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const API = '';           // 同源，路径自带前缀
+  const PREFIX = '/dsh-pet-bedroom';
+  // 素材走本插件的代理：卧室是独立页面，不能直接请求 dsh-pet 的路由前缀。
+  // 宿主半侧会把它转发到 <上游><petRoute>/thumb/<根>/<名>.webm（出厂 petRoute=/dsh-pet-7340）。
+  const PET_THUMB = PREFIX + '/pet/thumb/';
+
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage');
+  const petEl = $('pet');
+  const video = $('video');
+  const bubbleEl = $('bubble');
+  /** 椅子前景层：坐电脑前时盖在她后背上（图是从 room.png 原样抠的） */
+  const chairFrontEl = $('chairFront');
+
+  // ---------------------------------------------------------------- 家具热点
+  // 坐标是**图上的百分比**（x,y 左上角；w,h 尺寸），对着 1536×1024 的参考图
+  // 逐格量出来的（10% 主网格 + 5% 细网格标定）。改图必须重新标定。
+  // anchor 是「它该站到哪儿」——取家具正前方地面上的一行，不是家具本身。
+  //
+  // ⚠️ 方向别搞反：**anchor.y 越大，人在画面上越靠下**（实测 anchor 每 +1，
+  //    脚底 y 也 +1）。所以「整体往上移」= 所有 anchor.y 一起**减小**。
+  //
+  // ⚠️ 全局上移不要逐个改这里的数字！统一用下面的 ANCHOR_LIFT，
+  //    在 goTo() 里一次性减掉。因为除了这里的 anchor，还有好几处写死的
+  //    goTo({x,y})（躺床、起床、回中间、自由走动 WANDER），只改 anchor
+  //    会漏掉它们，导致「有的动作上移了、有的没动」。
+  const SPOTS = [
+    { id:'bed',   label:'鲸鱼大床', x:21, y:38, w:36, h:26,
+      detail:'被子是蓝鲸花纹，枕头边还搁着一条鲸鱼玩偶。它累了自己会走过来躺下，被子一盖就睡着了。',
+      action:'sleep', anchor:{x:37,y:55} },
+    { id:'night', label:'床头柜 · 台灯', x:57, y:47, w:8, h:16,
+      detail:'两层抽屉的白色小柜，台灯是暖光的。晚上开灯时，床头会亮起一小圈光。手机就放在这儿。',
+      action:'phone', anchor:{x:60,y:65} },
+    { id:'shelf', label:'书架', x:63, y:19, w:12, h:37,
+      detail:'五层书架，塞满了书，还养了几盆垂下来的绿萝。它偶尔会抽一本翻两页。',
+      action:'desk', anchor:{x:66,y:57} },
+    { id:'desk',  label:'电脑桌', x:68, y:44, w:27, h:21,
+      detail:'白色桌面，主机在右下角带一圈冷光。桌面上摊着它自己写的东西——日记和读书笔记就在这儿。点它会坐下、背对着你开始写。',
+      action:'desk', anchor:{x:79,y:67} },
+    { id:'chair', label:'人体工学椅', x:70, y:44, w:9, h:20,
+      detail:'白蓝配色的电竞椅，靠背上绣着一条鲸鱼。坐下写东西不腰疼。',
+      // 坐电脑前（刷抖音）的落脚点。用户要求「比原点偏下一些」，先 57→61，再挪到 66。
+      action:'desk', anchor:{x:74.5,y:66} },
+    { id:'art',   label:'鲸鱼挂画', x:45, y:19, w:17, h:22,
+      detail:'墙上那幅蓝鲸。是照着「鲸跃云间」画的，抬头就能看见。',
+      action:'idle', anchor:{x:53,y:64} },
+    { id:'win',   label:'落地窗', x:7, y:13, w:31, h:45,
+      detail:'一整面墙的落地窗，望出去是云海。天晴看得见远处的岛，下雨有水痕顺着玻璃往下爬，下雪就整个白掉。点它会踩到床上扒着窗台往外看。',
+      // 用户要求「比原点偏右一些（站在床上）」：原点 x:20 其实落在床左侧的地板上。
+      // 床面（被子）在 x 22~58 / y 44~66，挪到 x:30 / y:60 才真的**站在床上**。
+      action:'window', anchor:{x:30,y:60} },
+    { id:'plant', label:'龟背竹', x:4, y:33, w:15, h:35,
+      detail:'窗边最大的那盆。叶子长得有点野，每天早上第一缕光都先照到它。点它会走过去拿水枪喷两下。',
+      // 用户要求「比原点偏右一些」，先 13→18；又说「再多偏右一些」，再挪到 23。
+      // 站到花盆右侧更开阔的空地上，水枪有地方举。
+      action:'plant', anchor:{x:23,y:73} },
+    { id:'rug',   label:'星空地毯', x:26, y:62, w:47, h:26,
+      detail:'圆形地毯，画着鲸鱼和星星。房间正中间，点它就坐上去发呆。',
+      action:'rug', anchor:{x:48,y:80} },
+  ];
+
+  /**
+   * 全局落脚点上移量（% 舞台高）。
+   *
+   * 为什么需要它：桌宠容器是**底对齐**（`bottom:(100-spot.y)%`），容器高度一变，
+   * 角色在舞台上的实际位置就跟着变。删掉 `.zzz` 那行字后容器矮了 22.4px，
+   * 整个人往下掉了 2.707%（实测），于是所有交互都偏下。
+   *
+   * 这里统一减 2.7，在 goTo() 里一次性生效——**不要**去逐个改 SPOTS 的 y，
+   * 那样会漏掉写死的 goTo（躺床 / 起床 / 回中间 / WANDER 自由走动）。
+   * 以后再动容器结构（加/删容器内元素），重新量一次这个值即可。
+   */
+  const ANCHOR_LIFT = 2.7;
+
+  // 自由活动落脚点（百分比，y 是脚底那行；都落在地板菱形里）
+  const WANDER = [
+    {x:48,y:80},{x:40,y:76},{x:58,y:78},{x:34,y:70},{x:66,y:72},{x:52,y:84},
+  ];
+
+  const T = { labels:{dawn:'清晨',noon:'中午',afternoon:'下午',night:'晚间'},
+              order:['dawn','noon','afternoon','night'] };
+  const W = { labels:{sunny:'晴天',rain:'雨天',snow:'雪天'},
+              order:['sunny','rain','snow'] };
+
+  // ---------------------------------------------------------------- 状态
+  let snap = null;
+  let anims = { idle:'待机呼吸休闲' };
+  let petIdle = '待机呼吸休闲';
+  /** dsh-pet 的完整动画池（右键菜单「动作演示」的数据源） */
+  let allAnims = [];
+  /** 正在演示的纯动作名（非 null 时 background 的随机演示不抢） */
+  let demoName = null;
+  let lastDemoName = '';
+  let demoTimer = 0;
+  let spinTimer = 0;
+  let backRaf = 0;
+  /** 背面定格中：true 时不允许任何东西把 video 的播放顶掉 */
+  let holdBack = false;
+  let spot = { x:46, y:82 };       // 当前（脚底）
+  let target = { x:46, y:82 };     // 目标
+  let mode = 'idle';
+  let lastCmd = 0;
+  let lastPhone = 0;
+  let bubbleTimer = 0;
+  let busy = false;
+
+  const say = (text, ms = 5200) => {
+    bubbleEl.textContent = String(text || '');
+    bubbleEl.classList.add('show');
+    clearTimeout(bubbleTimer);
+    bubbleTimer = setTimeout(() => bubbleEl.classList.remove('show'), ms);
+  };
+
+  // ---------------------------------------------------------------- 素材
+  const thumbUrl = (name) => {
+    if (!snap || !snap.pet || !name) return '';
+    const root = snap.pet.assetRoot || snap.pet.entry;
+    return PET_THUMB + encodeURIComponent(root) + '/' + encodeURIComponent(name) + '.webm';
+  };
+
+  const setAnim = (name) => {
+    const url = thumbUrl(name);
+    if (!url) return;
+    holdBack = false;
+    clearTimeout(spinTimer);
+    video.style.opacity = '0';
+    const onReady = () => {
+      video.style.opacity = '1';
+      const p = video.play();
+      if (p && p.catch) p.catch(() => {});
+    };
+    video.addEventListener('loadeddata', onReady, { once:true });
+    video.src = url;
+    video.load();
+  };
+
+  // —— 背面定格 ——
+  // dsh-pet 的「小幅度原地360度旋转展示」是真的在转：逐帧抓下来量过，
+  // t≈2.2~2.5s 那一帧正好转到**背面**（后脑勺 + 裙摆，全身完整、没切腿）。
+  // 所以坐电脑前 / 刷抖音时不是靠 scaleX 翻转假装的，而是把这个动作播到
+  // 背面那一帧就定格停住——这是真背面，也是用户要的「参考 dsh-pet 的 360 展示」。
+  const BACK_FRAME_T = 2.3;
+  const setBackAnim = () => {
+    const url = thumbUrl(anims.spin);
+    if (!url) return;
+    holdBack = true;
+    clearTimeout(spinTimer);
+    video.style.opacity = '0';
+    const onReady = () => {
+      video.style.opacity = '1';
+      const p = video.play();
+      if (p && p.catch) p.catch(() => {});
+      armBackFreeze();
+    };
+    video.addEventListener('loadeddata', onReady, { once:true });
+    video.src = url;
+    video.load();
+  };
+  const armBackFreeze = () => {
+    // 注意：**不能靠 seek 跳帧**。这些 webm 是流式编码、没有可跳转索引，
+    // `video.currentTime = 2.3` 会把画面直接弹回 0（实测 t 从 2.14 变成 0）。
+    // 正确做法是让它正常播，播到背面那一帧时**就地 pause**，画面就停在那一帧。
+    // 用 rAF 盯着（timeupdate 只有 ~4Hz，会冲过头），精度够停在 2.15~2.3s。
+    clearTimeout(spinTimer);
+    const watch = () => {
+      if (!holdBack) return;
+      if (video.currentTime >= BACK_FRAME_T) { freezeAtBack(); return; }
+      backRaf = requestAnimationFrame(watch);
+    };
+    cancelAnimationFrame(backRaf);
+    backRaf = requestAnimationFrame(watch);
+    // 兜底：万一视频卡住没往前走，6 秒后也不再等
+    spinTimer = setTimeout(() => { if (holdBack) freezeAtBack(); }, 6000);
+  };
+  const freezeAtBack = () => {
+    if (!holdBack) return;
+    cancelAnimationFrame(backRaf);
+    clearTimeout(spinTimer);
+    try { video.pause(); } catch {}
+  };
+
+  const pick = (pool, pats, fallback) => {
+    if (!Array.isArray(pool) || !pool.length) return fallback;
+    for (const p of pats) { const hit = pool.find((n) => p.test(n)); if (hit) return hit; }
+    return fallback;
+  };
+
+  /**
+   * 把 dsh-pet 的整个动画池接进来。
+   *
+   * 关键点：不写死任何动画名——用户在 dsh-pet 里加/删/换皮，这里自动跟着变。
+   * `pool` 就是 <petRoute>/config 里那条 entry 的全部 animations（出厂 dsh-pet 有 106 个）。
+   */
+  const buildAnims = (pet) => {
+    const pool = (pet && pet.animations) || [];
+    petIdle = (pet && pet.idle && pet.idle[0]) || pick(pool, [/待机/,/呼吸/], '待机呼吸休闲');
+    anims = {
+      idle: petIdle,
+      sleep: pick(pool, [/小憩/,/沉眠/,/睡觉/,/睡眠/,/哈欠/], petIdle),
+      desk:  pick(pool, [/写代码/,/敲击桌面/,/轻快记录/,/忙碌/,/清点/], petIdle),
+      phone: pick(pool, [/对屏/,/碎碎念/,/东张西望/,/照镜子/], petIdle),
+      window:pick(pool, [/东张西望/,/伸懒腰/,/摇扇/,/发呆/], petIdle),
+      // 植物交互：用户指定用 dsh-pet 的「玩水枪」。
+      // 它排在第一位，只有 dsh-pet 里没有这条时才往后退到别的动作。
+      plant: pick(pool, [/玩水枪/,/浇水/,/水壶/,/浇花/,/凭空生花/,/蝴蝶蜜蜂/], petIdle),
+      // 360° 旋转展示：dsh-pet 自带的这个动作转到一半就是**背面**
+      spin:  pick(pool, [/360/,/旋转展示/,/转一圈/], petIdle),
+      click: pick(pool, [/点击回应/,/开心/,/害羞/], petIdle),
+      walk:  pick(pool, [/螃蟹走路/,/漂浮踏步/,/奔跑/], petIdle),
+    };
+    // 供右键菜单「动作演示」用的完整清单（去掉重复、保持原顺序）
+    allAnims = pool;
+  };
+
+  /** 从整池里随机抽一个动作来演示（避开当前正在播的那个） */
+  const randomDemo = () => {
+    if (!allAnims.length) return null;
+    let name = allAnims[Math.floor(Math.random() * allAnims.length)];
+    let guard = 0;
+    while (name === lastDemoName && allAnims.length > 1 && guard++ < 8) {
+      name = allAnims[Math.floor(Math.random() * allAnims.length)];
+    }
+    lastDemoName = name;
+    return name;
+  };
+
+  /**
+   * 演一段「不属于任何交互」的纯动作：播放一次，到点（或用户走动/下命令）
+   * 自动回到当前状态该有的动画。这就是"待机时自动演示随机动作"的实现。
+   */
+  const playDemo = (name, ms = 9000) => {
+    if (!name) return;
+    demoName = name;
+    setAnim(name);
+    clearTimeout(demoTimer);
+    demoTimer = setTimeout(() => {
+      demoName = null;
+      restoreAnim();
+    }, ms);
+  };
+
+  /** 回到当前 mode 该有的动画 */
+  const restoreAnim = () => {
+    if (demoName) return; // 正在演示就别抢
+    // 背面定格中：坐姿就是靠这一帧表达的，不能被别的动画顶掉
+    if (holdBack && mode === 'desk') { freezeAtBack(); return; }
+    if (mode === 'sleep') setAnim(anims.sleep);
+    else if (mode === 'desk') setBackAnim();
+    else if (mode === 'phone') setAnim(anims.phone);
+    else if (mode === 'window') setAnim(anims.window);
+    else if (mode === 'plant') setAnim(anims.plant);
+    else setAnim(anims.idle);
+  };
+
+  // ---------------------------------------------------------------- 移动
+  // 每帧直接写 DOM：setState 会把整块重排，纯浪费。
+  let raf = 0, lastT = performance.now();
+  const tick = (now) => {
+    const dt = Math.min(64, now - lastT) / 1000;
+    lastT = now;
+    const dx = target.x - spot.x, dy = target.y - spot.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0.15) {
+      const step = Math.min(dist, 16 * dt);
+      spot.x += (dx / dist) * step;
+      spot.y += (dy / dist) * step;
+    }
+    // 尺寸换算：素材画布里角色实体只占宽 33.8%，所以
+    //   「容器宽」× 0.338 = 屏幕上看到的角色宽
+    // **固定宽度**：以前按进深从 66% 变到 72%，导致同一个动作在房间不同位置
+    // 大小都不一样（用户反馈点落地窗、书架时偏大）。
+    // 60% → 约 20.3%，15% → 44.4；用户要求「约占舞台 14%」：14 / 0.338 ≈ 41.4。
+    const widthPct = 41.4;
+
+    // 定位要点（踩过坑，别乱改）：
+    //   · 素材 640×360，角色实体只占画布 x 33.1%~66.9%、y 16.7%~91.7%。
+    //   · 所以「容器」和「角色」不是同一个框：容器的中心≠角色中心，
+    //     容器的底 ≠ 角色的脚。
+    //   · 用 left = spot.x 再 translateX(-50%) 会把**容器**居中，
+    //     角色就整体偏左（画面上跑到窗边挡植物）。
+    //
+    // 正确做法：把 spot 当成**角色脚底**，先算出角色在容器内的相对位置，
+    // 再反推容器该放哪儿：
+    //   角色中心 x = 画布 50%      → 容器 left 用 -50% 居中即可（角色也在 50%）
+    //   角色脚底 y = 画布 91.7%    → 容器 bottom 要往上抬 8.3% 的画布高
+    const CHAR_CENTER_X = 0.5;      // 角色中心在画布水平 50%
+    const CHAR_FOOT_Y = 0.917;      // 角色脚底在画布垂直 91.7%
+
+    petEl.style.left = spot.x + '%';
+    petEl.style.top = 'auto';
+    petEl.style.bottom = (100 - spot.y) + '%';
+    petEl.style.width = widthPct.toFixed(2) + '%';
+    // 容器底边向上抬「画布底部留白」那么多，角色脚才落在 spot.y 这条线上。
+    // 用 % 表达：留白占容器高的 (1-0.917)=8.3%，容器高 = 宽 × 9/16，
+    // 换算到舞台高就是下面这个系数。
+    petEl.style.marginBottom = '0px';
+    petEl.style.transform =
+      'translateX(-' + (CHAR_CENTER_X * 100).toFixed(1) + '%) translateY(' +
+      ((1 - CHAR_FOOT_Y) * 100).toFixed(1) + '%)';
+    petEl.style.zIndex = String(55 + Math.round(spot.y));
+
+    // 气泡跟着角色头顶走（它挂在舞台层，不挂在容器里）。
+    // 头顶 ≈ spot.y 往上 0.26 个舞台高；夹在 12%~88% 之间，永远不出画面。
+    const headY = Math.min(88, Math.max(12, spot.y - 26));
+    bubbleEl.style.left = spot.x + '%';
+    bubbleEl.style.bottom = (100 - headY) + '%';
+
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+
+  // ---------------------------------------------------------------- 动作
+  /**
+   * 所有走位的**唯一入口**。全局上移在这里一次性生效，
+   * 所以 SPOTS 的 anchor、躺床/起床/回中间这些写死的坐标、
+   * 以及 WANDER 自由走动，全都会被同一个量修正，不会漏。
+   */
+  const goTo = (a) => { target = { x:a.x, y:a.y - ANCHOR_LIFT }; };
+
+  // ---------------------------------------------------------------- 姿态
+  // 素材只有一种站姿（正面）。坐、背、躺都靠 CSS 姿态变换表达，
+  // 统一在这里清场，避免上一个动作的 class 残留。
+  const setPose = ({ lie, sit, back, lean }) => {
+    petEl.classList.toggle('lie', !!lie);
+    petEl.classList.toggle('sit', !!sit);
+    petEl.classList.toggle('back', !!back);
+    petEl.classList.toggle('lean', !!lean);
+    // 坐到电脑前（back）时把椅子前景层亮出来，让椅背挡住她后背的一部分；
+    // 其它任何姿态都收起来，否则椅子会莫名其妙浮在房间中间。
+    if (chairFrontEl) chairFrontEl.classList.toggle('on', !!back);
+  };
+
+  const perform = (action) => {
+    if (!action) return;
+    // 任何真正的交互都要打断「随机动作演示」，否则会被它抢走画面
+    if (demoName) {
+      demoName = null;
+      clearTimeout(demoTimer);
+    }
+    const spotOf = (id) => SPOTS.find((s) => s.id === id);
+
+    // —— 躺床上：走到床边躺下，整个人转到近水平、贴在被面上 ——
+    if (action === 'sleep') {
+      // 躺下时身体中心要落在**床垫中央**，不是床前地面：
+      // 床在图上 x21~57 / y38~64，取中间偏上一点当躺点。
+      goTo({ x:42, y:62 }); mode = 'sleep';
+      setPose({ lie: true });
+      setAnim(anims.sleep);
+      say('那我躺一会儿…');
+      return;
+    }
+    if (action === 'wake') {
+      goTo({ x:48, y:80 }); mode = 'idle';
+      setPose({});
+      setAnim(anims.idle);
+      say('醒啦醒啦，别喊了');
+      return;
+    }
+
+    // —— 刷抖音 / 坐电脑前：坐下 + 播 360° 旋转（转到背面时就是背对镜头），
+    //    不再用 scaleX 翻转、也不再裁下半身 ——
+    if (action === 'desk') {
+      // 坐到**椅子**上，不是桌沿：椅子中心 x≈74.5，桌面锚点在 79 会把人挪到椅子右边去。
+      goTo(spotOf('chair').anchor); mode = 'desk';
+      setPose({ sit: true, back: true });
+      setBackAnim();
+      say('好，我坐下了');
+      return;
+    }
+    if (action === 'douyin') {
+      goTo(spotOf('chair').anchor); mode = 'desk';
+      setPose({ sit: true, back: true });
+      setBackAnim();
+      return;
+    }
+    if (action === 'douyin-stop') {
+      goTo({ x:48, y:80 }); mode = 'idle';
+      setPose({});
+      setAnim(anims.idle);
+      return;
+    }
+
+    // —— 看手机：站着捧在手里（微微前倾）——
+    if (action === 'phone') {
+      goTo(spotOf('night').anchor); mode = 'phone';
+      setPose({ lean: true });
+      setAnim(anims.phone);
+      say('手机我拿到手上了');
+      return;
+    }
+
+    // —— 窗边：趴在窗台往外看，前倾 ——
+    if (action === 'window') {
+      goTo(spotOf('win').anchor); mode = 'window';
+      setPose({ lean: true });
+      setAnim(anims.window);
+      say('外面好亮啊');
+      return;
+    }
+
+    // —— 玩水枪：走到龟背竹右边，拿水枪给叶子喷两下 ——
+    if (action === 'plant') {
+      goTo(spotOf('plant').anchor); mode = 'plant';
+      setPose({ sit: true });
+      setAnim(anims.plant);
+      say('给你喷两下水～');
+      return;
+    }
+
+    // —— 坐地毯 ——
+    if (action === 'rug') {
+      goTo(spotOf('rug').anchor); mode = 'rug';
+      setPose({ sit: true });
+      setAnim(anims.idle);
+      say('地上软软的');
+      return;
+    }
+
+    // 默认：回房间中间站着
+    goTo({ x:48, y:80 }); mode = 'idle';
+    setPose({});
+    setAnim(anims.idle);
+  };
+
+  // ---------------------------------------------------------------- 热点
+  const renderSpots = () => {
+    const box = $('hots');
+    box.innerHTML = '';
+    for (const s of SPOTS) {
+      const el = document.createElement('div');
+      el.className = 'hot';
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', s.label);
+      el.style.cssText = `left:${s.x}%;top:${s.y}%;width:${s.w}%;height:${s.h}%`;
+      const show = () => {
+        $('detailTitle').textContent = s.label;
+        $('detailText').textContent = s.detail;
+        $('detailTags').innerHTML =
+          '<span class="tag">房间里的家具</span><span class="tag">点一下会让它过去</span>';
+        $('detail').classList.add('show');
+      };
+      const hide = () => $('detail').classList.remove('show');
+      el.addEventListener('mouseenter', show);
+      el.addEventListener('mouseleave', hide);
+      el.addEventListener('focus', show);
+      el.addEventListener('blur', hide);
+      el.addEventListener('click', () => { perform(s.action); void sendCommand(s.action); });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); perform(s.action); void sendCommand(s.action); }
+      });
+      box.appendChild(el);
+    }
+  };
+
+  // ---------------------------------------------------------------- 网络
+  const jget = async (p) => {
+    const r = await fetch(PREFIX + p, { cache:'no-store' });
+    return r.json();
+  };
+  const jpost = async (p, body) => {
+    const r = await fetch(PREFIX + p, {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify(body || {}),
+    });
+    return r.json();
+  };
+
+  const sendCommand = async (action) => {
+    const d = await jpost('/command', { action, text:'', source:'panel' }).catch(() => null);
+    if (d && typeof d.id === 'number' && d.id > 0) lastCmd = d.id;
+    return d;
+  };
+
+  // ---------------------------------------------------------------- 渲染
+  const segs = (host, order, labels, current, onPick) => {
+    host.innerHTML = '';
+    for (const k of order) {
+      const b = document.createElement('button');
+      b.textContent = labels[k];
+      if (k === current) b.classList.add('on');
+      b.addEventListener('click', () => onPick(k));
+      host.appendChild(b);
+    }
+  };
+
+  const renderWeather = (w) => {
+    const box = $('weather');
+    box.innerHTML = '';
+    if (w === 'rain') {
+      for (let i = 0; i < 50; i++) {
+        const d = document.createElement('i');
+        d.className = 'drop';
+        d.style.left = ((i * 37) % 100) + '%';
+        d.style.animationDelay = ((i % 13) * 0.12) + 's';
+        d.style.animationDuration = (0.7 + ((i * 7) % 10) / 20) + 's';
+        d.style.opacity = 0.35 + ((i * 3) % 7) / 14;
+        box.appendChild(d);
+      }
+    } else if (w === 'snow') {
+      for (let i = 0; i < 42; i++) {
+        const f = document.createElement('i');
+        f.className = 'flake';
+        const size = 3 + ((i * 3) % 5);
+        f.style.left = ((i * 43) % 100) + '%';
+        f.style.width = size + 'px';
+        f.style.height = size + 'px';
+        f.style.animationDelay = ((i % 11) * 0.3) + 's';
+        f.style.animationDuration = (5 + ((i * 5) % 9)) + 's';
+        f.style.opacity = 0.5 + ((i * 7) % 6) / 14;
+        box.appendChild(f);
+      }
+    }
+  };
+
+  const renderDocs = () => {
+    const docs = (snap && snap.docs) || { diary:[], notes:[] };
+    const latest = docs.latestDiary;
+    const dB = $('diaryBox');
+    if (latest) {
+      dB.innerHTML = '';
+      const el = document.createElement('div');
+      el.className = 'doc';
+      el.innerHTML =
+        '<div class="h"><span class="t">📔 ' + esc(latest.date) + '</span>' +
+        '<span class="m">' + Math.max(1, Math.round(latest.bytes / 1024)) + ' KB</span></div>' +
+        '<div class="p">' + esc(latest.preview || '（这天什么也没写）') + '</div>' +
+        (latest.mood ? '<div class="mood">心情：' + esc(latest.mood) + '</div>' : '');
+      el.addEventListener('click', () => void openDoc('diary', latest.date));
+      dB.appendChild(el);
+    } else {
+      dB.innerHTML = '<p class="muted">桌上还没有日记。让它去写一篇吧。</p>';
+    }
+
+    const nB = $('noteBox');
+    const notes = docs.notes || [];
+    if (notes.length) {
+      nB.innerHTML = '';
+      for (const n of notes.slice(0, 6)) {
+        const el = document.createElement('div');
+        el.className = 'doc';
+        el.innerHTML =
+          '<div class="h"><span class="t">📖 ' + esc(n.title) + '</span>' +
+          '<span class="m">' + Math.max(1, Math.round(n.bytes / 1024)) + ' KB</span></div>' +
+          '<div class="p">' + esc(n.preview || '（空）') + '</div>';
+        el.addEventListener('click', () => void openDoc('notes', n.name));
+        nB.appendChild(el);
+      }
+    } else {
+      nB.innerHTML = '<p class="muted">书架上还没有读书笔记。</p>';
+    }
+
+    const pB = $('phoneBox');
+    const items = (snap && snap.phone && snap.phone.items) || [];
+    if (items.length) {
+      pB.innerHTML = '';
+      for (const it of items.slice(0, 3)) {
+        const el = document.createElement('div');
+        el.className = 'doc';
+        el.innerHTML =
+          '<div class="h"><span class="t">' + (it.channel === 'qq' ? '📱 QQ' : '📱 卧室') + '</span>' +
+          '<span class="m">' + new Date(it.at).toLocaleTimeString() + '</span></div>' +
+          '<div class="p">' + esc(it.text) + (it.action ? '  → ' + esc(it.action) : '') + '</div>';
+        pB.appendChild(el);
+      }
+    } else {
+      pB.innerHTML = '<p class="muted">手机上没有新消息。让你的 QQ 发一句过来试试。</p>';
+    }
+    // 手机里的 QQ 会话列表跟着一起刷
+    renderPhoneChats();
+  };
+
+  // ================================================================ 手机
+  // 四个 App，**只有 QQ 能点开**（真实聊天），其余点了只提示没装。
+  const APPS = [
+    { id: 'qq',   name: 'QQ',     glyph: '🐧', bg: '#12b7f5', live: true },
+    { id: 'douyin', name: '抖音',  glyph: '♪',  bg: '#161823', live: false },
+    { id: 'wechat', name: '微信',  glyph: '💬', bg: '#07c160', live: false },
+    { id: 'heybox', name: '小黑盒', glyph: '🎮', bg: '#1f2430', live: false },
+  ];
+
+  let phChats = [];        // 真实会话列表
+  let phCurrent = '';      // 当前打开的会话 id
+
+  // dock 里的四个：拨号 / 浏览器 / 相机 / 信息。**只有拨号能真点开**。
+  const DOCK = [
+    { id: 'dial',    name: '拨号',   glyph: '📞', bg: '#22a35a', live: true },
+    { id: 'browser', name: '浏览器', glyph: '🌐', bg: '#2f7de1', live: false },
+    { id: 'camera',  name: '相机',   glyph: '📷', bg: '#5c6470', live: false },
+    { id: 'message', name: '信息',   glyph: '💬', bg: '#3aa757', live: false },
+  ];
+
+  const phShow = (which) => {
+    $('phHome').style.display = which === 'home' ? 'flex' : 'none';
+    $('phQqList').classList.toggle('on', which === 'qq');
+    $('phChatView').classList.toggle('on', which === 'chat');
+    $('phDial').classList.toggle('on', which === 'dial');
+  };
+
+  // ---------------------------------------------------------------- 壁纸
+  // 壁纸是真实照片，文件在宿主的 assets/wall/ 下，走 /wallpaper/<id>.jpg。
+  // 换哪张由**宿主状态**决定（agent 用 bedroom_wallpaper 换，页面跟着变）。
+  let phWallId = '';
+  let phWallList = [];
+
+  const paintWallpaper = (id, list) => {
+    if (Array.isArray(list) && list.length) phWallList = list;
+    const next = id || (phWallList[0] && phWallList[0].id) || 'pine';
+    if (next === phWallId) return;
+    phWallId = next;
+    const el = $('phWall');
+    if (el) el.style.backgroundImage = 'url("' + PREFIX + '/wallpaper/' + next + '.jpg")';
+  };
+
+  /** 自己挑一张换上：落进宿主状态，刷新/重启都还在 */
+  const cycleWallpaper = async () => {
+    if (!phWallList.length) return;
+    const i = phWallList.findIndex((w) => w.id === phWallId);
+    const next = phWallList[(i + 1) % phWallList.length];
+    paintWallpaper(next.id, phWallList);
+    const r = await jpost('/room', { wallpaper: next.id });
+    if (r && r.ok) say('换壁纸：' + (next.label || next.id), 2600);
+    else say('壁纸没换成', 2400);
+  };
+
+  /** 画一组 App 图标（桌面和 dock 共用） */
+  const paintApps = (box, apps, onClick) => {
+    box.innerHTML = '';
+    for (const app of apps) {
+      const b = document.createElement('button');
+      b.className = 'ph-app' + (app.live ? ' live' : ' off');
+      b.type = 'button';
+      b.innerHTML =
+        '<span class="ico" style="background:' + app.bg + '">' + app.glyph + '</span>' +
+        '<span class="nm">' + esc(app.name) + '</span>';
+      b.addEventListener('click', () => onClick(app));
+      box.appendChild(b);
+    }
+  };
+
+  const renderDock = () => {
+    paintApps($('phDock'), DOCK, (app) => {
+      if (!app.live) {
+        say(app.name + ' 打不开，没装', 3200);
+        return;
+      }
+      if (app.id === 'dial') void openDial();
+    });
+  };
+
+  const renderApps = () => {
+    const box = $('phApps');
+    box.innerHTML = '';
+    const unread = phChats.reduce((n, c) => n + (c.unread ? 1 : 0), 0);
+    for (const app of APPS) {
+      const b = document.createElement('button');
+      b.className = 'ph-app' + (app.live ? ' live' : ' off');
+      b.type = 'button';
+      b.innerHTML =
+        '<span class="ico" style="background:' + app.bg + '">' + app.glyph +
+        (app.live && unread ? '<span class="badge">' + unread + '</span>' : '') +
+        '</span><span class="nm">' + esc(app.name) + '</span>';
+      b.addEventListener('click', () => {
+        if (!app.live) {
+          say(app.name + ' 我没装，点不开', 3200);
+          return;
+        }
+        void openQq();
+      });
+      box.appendChild(b);
+    }
+    renderDock();
+  };
+
+  // 长按桌面空白处换壁纸（和真手机一样）。点图标不算，别误触。
+  // 只绑一次：renderApps 会被 refresh 反复调用，绑在里面会叠一堆监听器。
+  const bindWallpaperGesture = () => {
+    const home = $('phHome');
+    if (home._wpBound) return;
+    home._wpBound = true;
+
+    let timer = null;
+    let start = null;
+    const cancel = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      start = null;
+    };
+
+    home.addEventListener('pointerdown', (e) => {
+      // 按在图标 / dock 上就不算「长按桌面空白」
+      if (e.target.closest('.ph-app')) return;
+      cancel();
+      start = { x: e.clientX, y: e.clientY };
+      timer = setTimeout(() => { timer = null; start = null; void cycleWallpaper(); }, 550);
+    });
+
+    home.addEventListener('pointermove', (e) => {
+      if (!start) return;
+      // 手指/鼠标移动超过 8px 就当拖动，不换壁纸
+      if (Math.abs(e.clientX - start.x) > 8 || Math.abs(e.clientY - start.y) > 8) cancel();
+    });
+
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+      home.addEventListener(ev, cancel);
+    }
+  };
+
+  const renderPhoneChats = () => {
+    phChats = (snap && snap.phone && snap.phone.qq && snap.phone.qq.chats) || [];
+    renderApps();
+    const box = $('phChats');
+    if (!phChats.length) {
+      box.innerHTML = '<div class="ph-empty">还没有聊天记录。<br>接入你的 QQ 后端后这里就会出现真实消息。</div>';
+      return;
+    }
+    box.innerHTML = '';
+    for (const c of phChats) {
+      const el = document.createElement('div');
+      el.className = 'ph-chat-item';
+      const t = new Date(c.lastAt);
+      const hhmm = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+      const initial = String(c.title || '?').slice(0, 1);
+      el.innerHTML =
+        '<span class="ph-av">' + avatarHtml(c.avatar, initial) + '</span>' +
+        '<span class="ph-ci"><span class="r1"><span class="nm">' + esc(c.title) + '</span>' +
+        '<span class="tm">' + hhmm + '</span></span>' +
+        '<span class="last">' + esc(c.lastText) + '</span></span>' +
+        (c.unread ? '<span class="ph-unread">' + c.unread + '</span>' : '');
+      el.addEventListener('click', () => void openChat(c));
+      box.appendChild(el);
+    }
+  };
+
+  /**
+   * 头像：有真实地址就 <img>（走宿主代理 /avatar/<QQ号>），
+   * 取不到（没 uid、图挂了）退回**首字母色块**——不留破图。
+   *
+   * 关键：兜底块**一开始就藏起来**（内联 display:none），只有 img 的 onerror
+   * 才把它放出来。否则它会和真实头像叠在一起（两个都显示）。
+   */
+  const avatarHtml = (url, initial) => {
+    const fb = '<span class="ph-av-fb" style="display:none">' + esc(initial) + '</span>';
+    if (!url) return fb.replace('style="display:none"', 'style="display:grid"');
+    return '<img class="ph-av-img" src="' + esc(url) + '" alt="" loading="lazy" ' +
+      "onerror=\"this.style.display='none';this.nextElementSibling.style.display='grid'\">" + fb;
+  };
+
+  const openQq = async () => {
+    phShow('qq');
+    renderPhoneChats();
+    void jpost('/phone/read', {});
+  };
+
+  // ---------------------------------------------------------------- 拨号
+  // 键盘 + 联系人。联系人**直接用 QQ 里的好友**（真实会话里的私聊对象），
+  // 不另编一份通讯录。群聊不算联系人。
+  const KEYS = [
+    ['1', ''], ['2', 'ABC'], ['3', 'DEF'],
+    ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'],
+    ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'],
+    ['*', ''], ['0', '+'], ['#', ''],
+  ];
+  let phNumber = '';
+
+  const renderKeys = () => {
+    const box = $('phKeys');
+    if (box.childElementCount) return;   // 只建一次
+    box.innerHTML = '';
+    for (const [d, s] of KEYS) {
+      const b = document.createElement('button');
+      b.className = 'ph-key';
+      b.type = 'button';
+      b.innerHTML = '<span class="d">' + d + '</span>' + (s ? '<span class="s">' + s + '</span>' : '');
+      b.addEventListener('click', () => {
+        if (phNumber.length >= 20) return;
+        phNumber += d;
+        paintNumber();
+      });
+      box.appendChild(b);
+    }
+  };
+
+  const paintNumber = () => {
+    const el = $('phNumShow');
+    el.textContent = phNumber || '输入号码';
+    el.classList.toggle('ph-placeholder', !phNumber);
+  };
+
+  /** 联系人 = QQ 私聊里的人（群聊不算） */
+  const phoneContacts = () => phChats.filter((c) => c.kind === 'private');
+
+  const renderContacts = () => {
+    const box = $('phContacts');
+    const list = phoneContacts();
+    if (!list.length) {
+      box.innerHTML = '<div class="ph-empty">还没有联系人。<br>QQ 里聊过天的人会出现在这儿。</div>';
+      return;
+    }
+    box.innerHTML = '';
+    for (const c of list) {
+      const el = document.createElement('div');
+      el.className = 'ph-contact';
+      el.innerHTML =
+        '<span class="ph-av">' + avatarHtml(c.avatar, String(c.title || '?').slice(0, 1)) + '</span>' +
+        '<span class="nm">' + esc(c.title) + '</span>' +
+        '<span class="qq">' + esc(c.id || '') + '</span>';
+      // 点联系人 = 把他的 QQ 号填进拨号框（真号码，不编造）
+      el.addEventListener('click', () => {
+        phNumber = String(c.id || '').slice(0, 20);
+        paintNumber();
+      });
+      box.appendChild(el);
+    }
+  };
+
+  const openDial = async () => {
+    renderKeys();
+    paintNumber();
+    renderContacts();
+    phShow('dial');
+  };
+
+  const openChat = async (c) => {
+    phCurrent = c.chatId;
+    $('phChatTitle').textContent = c.title;
+    const box = $('phMsgs');
+    box.innerHTML = '<div class="ph-empty">读取中…</div>';
+    phShow('chat');
+    try {
+      const d = await jget('/phone/chat?id=' + encodeURIComponent(c.chatId));
+      const msgs = (d && d.messages) || [];
+      if (!msgs.length) {
+        box.innerHTML = '<div class="ph-empty">这个会话没有可显示的消息。</div>';
+        return;
+      }
+      box.innerHTML = '';
+      for (const m of msgs) {
+        const row = document.createElement('div');
+        row.className = 'ph-row ' + (m.from === 'me' ? 'me' : 'them');
+        const t = new Date(m.at);
+        const hhmm = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+        // 对方头像用他自己的（真实 QQ 头像）；她自己的那侧不摆头像，
+        // 和手机 QQ 一样，右边只留气泡。
+        const face = m.from === 'me'
+          ? ''
+          : '<span class="ph-rowav">' + avatarHtml(m.avatar, String(m.who || '?').slice(0, 1)) + '</span>';
+        // 群聊里多人说话：气泡上方标出是谁（私聊不标，省地方）
+        const nameTag = m.showName ? '<span class="ph-who">' + esc(m.who) + '</span>' : '';
+        row.innerHTML = face +
+          '<div class="ph-msgwrap"><div class="ph-msg ' + (m.from === 'me' ? 'me' : 'them') + '">' +
+          nameTag + esc(m.text) + '<span class="tt">' + hhmm + '</span></div></div>';
+        box.appendChild(row);
+      }
+      box.scrollTop = box.scrollHeight;
+    } catch {
+      box.innerHTML = '<div class="ph-empty">读不到这个会话。</div>';
+    }
+  };
+
+  // 手机的状态栏时间 + 三个返回键
+  const tickPhoneClock = () => {
+    const d = new Date();
+    const el = $('phTime');
+    if (el) el.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  tickPhoneClock();
+  setInterval(tickPhoneClock, 20000);
+  $('phQqBack').addEventListener('click', () => phShow('home'));
+  $('phChatBack').addEventListener('click', () => { phShow('qq'); renderPhoneChats(); });
+  // 拨号：返回桌面 / 删一位 / 呼叫
+  $('phDialBack').addEventListener('click', () => phShow('home'));
+  $('phDelBtn').addEventListener('click', () => {
+    phNumber = phNumber.slice(0, -1);
+    paintNumber();
+  });
+  $('phCallBtn').addEventListener('click', () => {
+    if (!phNumber) {
+      say('先按几个数字吧', 2600);
+      return;
+    }
+    // 这是浏览器里的假手机，打不出去——照实说，不装样子
+    say('拨号键按下了：' + phNumber.slice(0, 16) + '（这台手机打不出去）', 5200);
+  });
+
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  // 阅读器：**打开才创建，关闭即移除**——不留一个隐藏的全屏层。
+  const openDoc = async (kind, name) => {
+    let content = '读不到';
+    let title = (kind === 'diary' ? '日记 · ' : '读书笔记 · ') + name;
+    try {
+      const d = await jget('/doc?kind=' + encodeURIComponent(kind) + '&name=' + encodeURIComponent(name));
+      content = d && d.ok ? d.content : ((d && d.error) || '读不到');
+    } catch { content = '请求失败'; }
+    const wrap = document.createElement('div');
+    wrap.className = 'reader';
+    wrap.innerHTML =
+      '<div class="sheet"><header><span class="t">' + esc(title) + '</span>' +
+      '<button class="x" aria-label="关闭">×</button></header><pre></pre></div>';
+    wrap.querySelector('pre').textContent = content;
+    const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+    wrap.querySelector('.x').addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+  };
+
+  const chip = (cls, text) => {
+    $('chip').querySelector('.dot').className = 'dot ' + cls;
+    $('chipText').textContent = text;
+  };
+
+  // ---------------------------------------------------------------- 刷新
+  const refresh = async () => {
+    try {
+      const d = await jget('/state');
+      if (!d || !d.ok) return;
+      const first = !snap;
+      snap = d;
+      buildAnims(d.pet);
+
+      const room = d.room || {};
+      stage.dataset.time = room.time || 'noon';
+      renderWeather(room.weather || 'sunny');
+
+      segs($('segTime'), T.order, T.labels, room.time || 'noon',
+        (k) => void jpost('/room', { time:k, autoTime:false }).then(refresh));
+      segs($('segWeather'), W.order, W.labels, room.weather || 'sunny',
+        (k) => void jpost('/room', { weather:k }).then(refresh));
+      $('btnAuto').classList.toggle('on', !!room.timeAuto);
+
+      // 手机壁纸：换成真实照片（agent 自己挑的那张）
+      paintWallpaper(room.wallpaper, room.wallpaperList);
+
+      const docs = d.docs || { diary:[], notes:[] };
+      $('sub').textContent =
+        (T.labels[room.time] || '') + ' · ' + (W.labels[room.weather] || '') +
+        (room.timeAuto ? ' · 跟着真实时间走' : ' · 手动') +
+        ' · 桌上 ' + (docs.diary || []).length + ' 篇日记 / ' + (docs.notes || []).length + ' 篇笔记';
+
+      // 抖音状态镜像的是你后端自己的状态（只读，不去开浏览器）
+      const dy = d.douyin;
+      if (!dy) chip('warn', '抖音状态未知');
+      else if (!dy.ok) chip('bad', '抖音没连上：' + (dy.reason || '无响应'));
+      else if (dy.running) chip('', '正在刷一轮（后端自己在跑）');
+      else if (dy.status === 'paused') chip('warn', '刷抖音暂停了：' + (dy.reason || ''));
+      else chip('', '没在刷' + (dy.watched ? ' · 今天看过 ' + dy.watched + ' 个' : ''));
+
+      renderDocs();
+
+      // 宿主命令
+      if (d.command && d.command.id > lastCmd) {
+        lastCmd = d.command.id;
+        perform(d.command.action);
+        if (d.say && d.say.text) say(d.say.text);
+      }
+
+      // QQ 新消息：**不走过去拿手机**，直接执行命令（用户明确要求）。
+      // 只亮一下手机 + 冒个气泡说收到了，人不离开原地。
+      const items = (d.phone && d.phone.items) || [];
+      const newest = items[0];
+      if (newest && newest.id !== lastPhone) {
+        const wasFirst = lastPhone === 0;
+        lastPhone = newest.id;
+        if (!wasFirst) {
+          const brief = newest.action
+            ? '收到：' + String(newest.text).slice(0, 28)
+            : String(newest.text).slice(0, 40);
+          say(brief, 5000);
+          void jpost('/phone/read', {});
+        }
+      }
+
+      if (first) { setAnim(anims.idle); }
+    } catch { /* 下一轮再试 */ }
+  };
+
+  // ---------------------------------------------------------------- 交互
+  $('btnAuto').addEventListener('click', async () => {
+    const next = !(snap && snap.room && snap.room.timeAuto);
+    await jpost('/room', { autoTime: next });
+    void refresh();
+  });
+
+  $('btnDouyin').addEventListener('click', async () => {
+    if (busy) return;
+    busy = true; $('btnDouyin').disabled = true;
+    try {
+      perform('douyin');
+      const d = await sendCommand('douyin');
+      const r = (d && d.result) || {};
+      say(r.ok ? '开刷了，别吵我' : '刷不了：' + String(r.reason || '未知原因').slice(0,44), r.ok ? 6000 : 9000);
+      void refresh();
+    } finally { busy = false; $('btnDouyin').disabled = false; }
+  });
+
+  $('btnStop').addEventListener('click', async () => {
+    if (busy) return;
+    busy = true; $('btnStop').disabled = true;
+    try {
+      perform('douyin-stop');
+      const d = await sendCommand('douyin-stop');
+      const r = (d && d.result) || {};
+      say(r.ok ? '好啦不刷了' : '停不下来：' + String(r.reason || '').slice(0,36), 7000);
+      void refresh();
+    } finally { busy = false; $('btnStop').disabled = false; }
+  });
+
+  $('btnSend').addEventListener('click', async () => {
+    const input = $('say');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    const d = await jpost('/phone/say', { text }).catch(() => null);
+    if (d && d.action) perform(d.action);
+    else say('嗯？这句我没看懂');
+  });
+  $('say').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnSend').click(); });
+
+  const petHit = $('petHit');
+  petHit.addEventListener('click', () => {
+    setAnim(anims.click);
+    say('诶？');
+    // 点完回到当前状态该有的动画（睡着就别自己站起来）
+    setTimeout(() => {
+      if (mode === 'sleep') setAnim(anims.sleep);
+      else if (mode === 'desk') setAnim(anims.desk);
+      else setAnim(anims.idle);
+    }, 2400);
+  });
+
+  // 自由活动：只在 idle 时自己溜达；坐着/躺着不乱动，
+  // 否则会出现「躺在床上滑行」这种穿帮。
+  setInterval(() => {
+    if (mode !== 'idle') return;
+    const s = WANDER[Math.floor(Math.random() * WANDER.length)];
+    goTo(s);
+    if (Math.random() < 0.35 && !demoName) setAnim(anims.walk);
+  }, 9000);
+
+  // ---------------------------------------------------------------- 待机自动演示
+  // 用户没有下命令、它也只是站着待机时，隔一段时间随机演一段 dsh-pet 的动作。
+  // 有交互（mode 不是 idle）或在演示中就不抢——避免和真实行为打架。
+  setInterval(() => {
+    if (mode !== 'idle' || demoName) return;
+    if (document.hidden) return;           // 标签页在后台就别演了
+    const name = randomDemo();
+    if (name) playDemo(name, 9000);
+  }, 14000);
+
+  // ---------------------------------------------------------------- 右键动作菜单
+  const ctx = $('ctxmenu');
+
+  const closeCtx = () => {
+    ctx.classList.remove('open');
+    ctx.innerHTML = '';
+  };
+
+  /** 在 (x,y) 处打开「动作演示」菜单，列出 dsh-pet 的全部动画 */
+  const openCtx = (x, y) => {
+    if (!allAnims.length) {
+      say('还没读到动作池：dsh-pet 可能没在运行');
+      return;
+    }
+    ctx.innerHTML = '';
+    const hd = document.createElement('div');
+    hd.className = 'hd';
+    hd.textContent = '动作演示 · 共 ' + allAnims.length + ' 个（来自 dsh-pet）';
+    ctx.appendChild(hd);
+
+    for (const name of allAnims) {
+      const it = document.createElement('div');
+      it.className = 'it';
+      it.setAttribute('role', 'menuitem');
+      it.textContent = name;
+      if (name === demoName) it.classList.add('on');
+      it.addEventListener('click', () => {
+        playDemo(name, 12000);
+        closeCtx();
+      });
+      ctx.appendChild(it);
+    }
+
+    // 先显示再量尺寸，避免拿到 0 宽高
+    ctx.classList.add('open');
+    const stageRect = stage.getBoundingClientRect();
+    const box = ctx.getBoundingClientRect();
+    const left = Math.min(Math.max(8, x), stageRect.width - box.width - 8);
+    const top = Math.min(Math.max(8, y), stageRect.height - box.height - 8);
+    ctx.style.left = left + 'px';
+    ctx.style.top = top + 'px';
+  };
+
+  // 右键：宠物身上或房间里都能唤出动作菜单
+  stage.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    openCtx(e.clientX - r.left, e.clientY - r.top);
+  });
+  // 点别处/按 Esc 关掉
+  document.addEventListener('click', (e) => {
+    if (!ctx.contains(e.target)) closeCtx();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCtx();
+  });
+
+  // ---------------------------------------------------------------- 退出卧室
+  // 「卧室」是**同窗口**跳进来的独立页面，进来后没有返回入口（用户反馈过）。
+  // 优先回 DSH 主界面根路径；history 里如果有上一页就后退，两种都稳。
+  $('btnExit').addEventListener('click', () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      // 有些桌面 webview 的 back 不生效，兜底半秒后直接跳根路径
+      setTimeout(() => {
+        if (!document.hidden && location.pathname.startsWith('/dsh-pet-bedroom')) {
+          window.location.assign('/');
+        }
+      }, 400);
+    } else {
+      window.location.assign('/');
+    }
+  });
+
+  renderSpots();
+  bindWallpaperGesture();
+  void refresh();
+  setInterval(() => void refresh(), 2500);
+
+  // 房间图加载失败时明确报错——绝不静默留一片黑。
+  const roomImg = $('roomImg');
+  const showFatal = (msg) => {
+    const box = $('fatal');
+    if (!box) return;
+    $('fatalMsg').textContent = msg;
+    box.style.display = 'flex';
+  };
+  if (roomImg) {
+    roomImg.addEventListener('error', () => {
+      showFatal('请求 ' + roomImg.currentSrc + ' 失败（HTTP 错误或文件不存在）。');
+    });
+    // 已经加载完成但宽度为 0，说明图是坏的
+    if (roomImg.complete && roomImg.naturalWidth === 0) {
+      showFatal('图片存在但无法解码：' + roomImg.currentSrc);
+    }
+  }
+})();
+</script>
+</body>
+</html>

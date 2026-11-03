@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "title": "Pet Bedroom",
+    "description": "A bedroom of its own for the desktop pet: a bed to sleep in, a desk with a computer, a window onto a seaside view, and a phone that rings — commands that arrive over QQ are carried out inside the room."
+  },
+  "ui": {
+    "title": "Pet Bedroom",
+    "subtitle": "Watch it sleep, use the computer, and read its phone",
+    "open": "Enter",
+    "close": "Leave",
+    "sleep": "Go to bed",
+    "wake": "Wake up",
+    "desk": "To the desk",
+    "phone": "Check phone",
+    "idle": "Wander",
+    "window": "Look outside",
+    "screenOff": "The phone screen is dark",
+    "screenOn": "The phone screen lights up",
+    "booting": "Moving the pet into its room…",
+    "noPet": "No pet found yet: install dsh-pet and enable its display first.",
+    "petMissing": "Could not load pet animation assets (dsh-pet may not be running).",
+    "feed": "Phone",
+    "commandLabel": "Command from QQ",
+    "douyinRunning": "Watching Douyin",
+    "douyinIdle": "Idle",
+    "mute": "Mute",
+    "unmute": "Unmute"
+  },
+  "commands": {
+    "sleep": "sleep",
+    "wake": "wake up",
+    "desk": "go to the desk",
+    "phone": "check the phone",
+    "douyin": "watch Douyin",
+    "stop": "stop watching",
+    "window": "look outside",
+    "idle": "wander around"
+  }
+}

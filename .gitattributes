@@ -1,0 +1,17 @@
+# 图片/视频按二进制处理，别让 git 尝试文本 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webm binary
+*.ico binary
+
+# 统一换行，避免 Windows 提交把整文件标成改动
+* text=auto eol=lf
+*.py text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
