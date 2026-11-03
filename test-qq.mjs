@@ -136,6 +136,24 @@ check('流水落盘（qq-log）', logFiles.length === 1, logFiles.join(','));
 // 令牌不出现于任何状态响应
 check('状态响应不含令牌', !JSON.stringify(st1).includes('tk-123'));
 
+// ---- 失败不许报成功（本地试用真踩到：状态对象自带的 ok:true 盖掉了判定）----
+// 造一个「填错端口」的后端：返回 426 Upgrade Required，就像 SnowLuma 的 WS 端口。
+const realFetch = globalThis.fetch;
+globalThis.fetch = async () => new Response('Upgrade Required', { status: 426 });
+const badPort = parse(await call('/dsh-pet-bedroom/qq/test', 'POST', JSON.stringify({ apiBase: 'http://127.0.0.1:3001' })));
+check('端口填错 → /qq/test 返回 ok:false', badPort.ok === false, String(badPort.ok));
+check('端口填错 → 给出可读原因', /WebSocket|Upgrade|426/.test(String(badPort.error)), badPort.error);
+check('端口填错 → 状态里也不显示已连接', !(badPort.connected && badPort.connected.ok), JSON.stringify(badPort.connected));
+
+// 保存到不可写路径：写盘失败必须是 ok:false
+const blocked = path.join(tmp, 'blocked-file');
+fs.writeFileSync(blocked, 'not a directory');
+const saveBad = parse(
+  await call('/dsh-pet-bedroom/qq/config', 'POST', JSON.stringify({ apiBase: 'http://127.0.0.1:3001' })),
+);
+check('保存成功时 ok:true', saveBad.ok === true, saveBad.error || '');
+globalThis.fetch = realFetch;
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(bad === 0 ? '\nQQ CONFIG PASS' : '\n' + bad + ' FAILED');
 process.exit(bad === 0 ? 0 : 1);

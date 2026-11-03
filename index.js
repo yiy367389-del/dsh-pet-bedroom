@@ -409,8 +409,15 @@ export function apply(ctx, config = {}) {
         data = null;
       }
       if (!res.ok) {
+        // 426 / 101 是「这是 WebSocket 端口，不是 HTTP API 端口」的典型信号：
+        // SnowLuma 的 WS 服务与 HTTP API 端口不同，填错时浏览器/Node 只会看到升级要求，
+        // 直接把这句翻译成人话，免得用户对着 "Upgrade Required" 猜。
         const said = data?.wording || data?.message || text.slice(0, 160) || 'HTTP ' + res.status;
-        return { ok: false, status: res.status, error: String(said) };
+        const hint =
+          res.status === 426 || res.status === 101
+            ? '（这个端口是 WebSocket 服务，不是 HTTP API。请填 SnowLuma 面板里「HTTP API」那一栏的端口，默认 3001 也常被 WS 占用）'
+            : '';
+        return { ok: false, status: res.status, error: String(said) + hint };
       }
       if (!data || typeof data !== 'object') {
         return { ok: false, status: res.status, error: '返回的不是 JSON —— 这个地址可能不是 OneBot HTTP API' };
@@ -2001,7 +2008,9 @@ export function apply(ctx, config = {}) {
           if (body.allowGroup !== undefined) patch.allowGroup = body.allowGroup === true;
           if (body.enabled !== undefined) patch.enabled = body.enabled !== false;
           const saved = writeQq(patch);
-          return writeJson(res, 200, { ok: saved, ...qqInfo(origin), error: saved ? '' : '写不进 qq.json（检查目录权限）' });
+          // 注意顺序：qqInfo 自带 ok:true，必须先铺开它再写判定，
+          // 否则保存失败会被自己的状态对象盖成「成功」（本地试用时踩到过）。
+          return writeJson(res, 200, { ...qqInfo(origin), ok: saved, error: saved ? '' : '写不进 qq.json（检查目录权限）' });
         }
 
         if (req.method === 'POST' && p === '/qq/test') {
@@ -2011,7 +2020,17 @@ export function apply(ctx, config = {}) {
           if (body.apiBase !== undefined) over.apiBase = body.apiBase;
           if (body.token !== undefined) over.token = String(body.token);
           const result = await testQq(over);
-          return writeJson(res, 200, { ...result, ...qqInfo(origin) });
+          // 同上：状态对象自带 ok:true，判定必须写在它之后，
+          // 否则「没连上」会被盖成「通了」——这正是本地试用暴露的问题。
+          return writeJson(res, 200, {
+            ...qqInfo(origin),
+            ok: result.ok,
+            apiBase: result.apiBase,
+            uin: result.uin,
+            nickname: result.nickname,
+            friendCount: result.friendCount,
+            error: result.ok ? '' : result.error,
+          });
         }
 
         // SnowLuma 的「HTTP 上报」填这个地址；也接受 access_token 查询参数

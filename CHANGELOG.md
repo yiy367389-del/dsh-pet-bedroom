@@ -3,6 +3,22 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.3.4] - 2026-11-03
+
+本地安装试用后发现并修掉一个会谎报成功的缺陷。
+
+### 修复
+
+- `/qq/test` 与 `/qq/config` 的 `ok` 被尾部铺开的状态对象覆盖（`qqInfo()` 自带 `ok:true`），
+  导致端口填错、写盘失败时仍返回 `ok:true`，窗口会显示「通了」。现在先铺开状态、再写判定。
+- OneBot HTTP 请求遇到 426 / 101 时给出可读提示：那个端口是 WebSocket 服务，
+  不是 HTTP API（SnowLuma 的 WS 与 HTTP 往往不在同一个端口）。
+
+### 新增
+
+- `test-qq-fail.mjs`：用占位文件模拟写盘失败，断言 `/qq/config` 必须回 `ok:false`。
+- `test-qq.mjs` 补 3 条断言：端口填错时 `ok:false`、给出可读原因、状态里不显示已连接。
+
 ## [2.3.3] - 2026-11-03
 
 验证脚本随包发布，让 README 里的每条命令在 Release 产物里都真能跑。

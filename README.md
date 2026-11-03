@@ -116,6 +116,7 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 
 | 版本 | 内容 |
 |:--|:--|
+| [v2.3.4](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.4) | 修「失败也报成功」：`/qq/test`、`/qq/config` 的 ok 被状态对象覆盖 |
 | [v2.3.3](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.3) | 验证脚本随包发布：从 Release 装下来也能直接跑 README 里的每条命令 |
 | [v2.3.2](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.2) | 自检条数与测试套数改为与实际一致 |
 | [v2.3.1](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.1) | Release 说明补上版本正文；`release-notes.mjs` 接进发版流程 |
@@ -135,10 +136,10 @@ https://github.com/yiy367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pe
 一行安装：
 
 ```bash
-dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.3.3/dsh-pet-bedroom.tgz
+dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.3.4/dsh-pet-bedroom.tgz
 ```
 
-想固定某个版本就把 URL 里的 `v2.3.3` 换成对应 tag；想始终跟最新就把整段换成
+想固定某个版本就把 URL 里的 `v2.3.4` 换成对应 tag；想始终跟最新就把整段换成
 `releases/latest/download/dsh-pet-bedroom.tgz`。
 
 从源码安装（改代码时用）：
@@ -604,6 +605,7 @@ dsh-pet-bedroom/
 ├─ test-group.mjs        端到端：群聊标题与会话人
 ├─ test-config.mjs       端到端：通用接口（petRoute/petId/chatService/douyinApiBase）
 ├─ test-qq.mjs           端到端：QQ 连接窗口（保存/测试连接/上报校验/去重/进手机）
+├─ test-qq-fail.mjs      端到端：写盘失败必须如实报 ok:false（不许假成功）
 ├─ preview.mjs           独立预览服务器（不重启 DSH 验证页面改动）
 ├─ v-*.mjs               Playwright 可视验证（头像/拨号/群聊/壁纸/圆角）
 ├─ make-chair.py         从 room.png 抠椅子生成前景层
@@ -667,6 +669,7 @@ node test-phone.mjs     # 手机会话 + 抖音接口
 node test-group.mjs     # 群聊标题 + 发言人
 node test-config.mjs    # 通用接口：自定义 petRoute/chatService/douyinApiBase 全生效
 node test-qq.mjs        # QQ 连接窗口：保存/测试连接/上报鉴权/去重/进手机
+node test-qq-fail.mjs   # 失败不许报成功：写盘失败时 /qq/config 必须回 ok:false
 node test-entry.cjs     # 收录条目：manifest / 分类 / 描述与代码一致性（16 项）
 ```
 
@@ -751,7 +754,7 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 | 要求 | 状态 |
 |:--|:--|
 | `package.json` 声明 `dsh.bundle`（含 `patch`） | ✅ `"bundle": { "patch": "./cordis.patch.yml" }`，且 `cordis.patch.yml` 在仓库根 |
-| 真实可用的代码（非占位/纯 README） | ✅ 136 条静态自检 + 6 套端到端/冒烟测试全部通过 |
+| 真实可用的代码（非占位/纯 README） | ✅ 136 条静态自检 + 7 套端到端/冒烟测试全部通过 |
 | 仓库创建满 1 天 | ⏳ 建于 `2026-11-03T11:34Z`，`2026-11-04T11:34Z` 之后达标（CI 自动判定，代码无需改动） |
 | 添加 `dsh-plugin` topic | ✅ 已添加（另有 `desktop-pet`、`cordis-plugin`、`deepseek-harness`） |
 | 描述只讲功能、不夸大 | ✅ 描述里的「6 个工具」用 `test-entry.cjs` 对着 `index.js` 数过，QQ/抖音也各有一条断言 |
@@ -769,12 +772,16 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 
 ## 版本与演进
 
+- **v2.3.4**：修「失败也报成功」。本地装上后实测发现 `/qq/test` 与 `/qq/config` 的 `ok`
+  被尾部铺开的状态对象（自带 `ok:true`）覆盖，端口填错时窗口仍会显示「通了」。
+  现在判定写在状态之后；顺带把 426/101 翻译成人话（那是 WebSocket 端口，不是 HTTP API）。
+  新增 `test-qq-fail.mjs` 锁住「写盘失败必须 ok:false」。
 - **v2.3.3**：验证脚本随包发布。之前 `files` 只带运行时代码，README 却让人在项目目录跑
   `node audit.cjs`——从 Release 装下来的用户照着敲会 file not found。现在 `audit.cjs`、
   `test-*.mjs`、`test-entry.cjs`、`smoke.mjs`、`preview.mjs`、`v-*.mjs`、`*.py`、`release*.mjs`
   与 `.github/` 里的条目草稿都随包发出（43 个文件，包体 3.3 MB）；audit 新增一条守卫，
   README 点名要跑的脚本只要没在 `files` 里就 FAIL。
-- **v2.3.2**：文档数字与实际对齐：端到端/冒烟套数此前写成 7 套（多算了
+- **v2.3.2**：文档数字与实际对齐：端到端/冒烟套数当时写错（多算了
   一个不存在的测试文件）。这类数字现在由 `audit.cjs` 与 `test-entry.cjs` 一起守住。
 - **v2.3.1**：每个 Release 的说明补上该版本正文。`release-notes.mjs` 从 `CHANGELOG.md`
   取对应小节写进 Release 正文并附安装命令，可重复执行；发版工作流发完自动跑一次。
