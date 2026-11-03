@@ -42,9 +42,15 @@ const fallback = await page.evaluate(() => {
   });
 });
 
-console.log('=== 头像取不到时（拦截 /avatar/）===');
+console.log('=== 头像取不到时（只拦截 /avatar/，群头像不拦）===');
 for (const f of fallback) console.log('  ', JSON.stringify(f));
-const allOk = fallback.every((f) => f.fbVisible && f.fbText && f.avatarBoxChildrenVisible === 1);
-console.log('\n每个头像框只显示一个元素（首字母兜底）=', allOk ? 'OK' : 'FAIL');
+// 正确口径：每个头像框**始终只显示一个元素**；只对「图真的加载失败」的那些，
+// 要求首字母兜底可见。群头像走另一条路由、没被拦截，不该要求兜底。
+const oneChild = fallback.every((f) => f.avatarBoxChildrenVisible === 1);
+const fallbackOk = fallback.every((f) => !f.imgBroken || (f.fbVisible && Boolean(f.fbText)));
+const exercised = fallback.some((f) => f.imgBroken && f.fbVisible);
+console.log('每个头像框只显示一个元素 =', oneChild ? 'OK' : 'FAIL');
+console.log('加载失败的头像都有首字母兜底 =', fallbackOk ? 'OK' : 'FAIL');
+console.log('至少验证到一个失败头像 =', exercised ? 'OK' : `SKIP（本次数据里没有失败头像，共 ${fallback.length} 个）`);
 
 await browser.close();
