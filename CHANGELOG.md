@@ -3,6 +3,29 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.1.0] - 2026-11-03
+
+QQ 连接窗口（默认 SnowLuma）。
+
+### 新增
+
+- 页面右上角「QQ 连接」按钮与配置窗口：选后端（默认 SnowLuma）、填 OneBot HTTP
+  地址/令牌/主人 QQ、复制上报地址、测试连接、保存；关闭时 `display:none`，不挂遮罩。
+- 宿主路由：`GET /qq`（状态，不含令牌）、`POST /qq/config`（写 `qq.json`，立即生效）、
+  `POST /qq/test`（真调 `get_login_info` / `get_friend_list`）、
+  `POST /qq/event`（OneBot 11 HTTP 上报入口）。
+- 上报处理：校验 `Authorization: Bearer` / `?access_token=`，按 `message_id` 去重，
+  只收主人私聊；消息进手机未读并追加 `$DSH_HOME/dsh-pet-bedroom/qq-log/*.jsonl`。
+- `qqLog` 流水并入手机聊天列表（与 Aurabot chatlog 去重合并）。
+- 配置项 `qqApiBase` / `qqToken` / `qqSelfId` / `qqFile`；
+  环境变量 `BEDROOM_QQ_API` / `BEDROOM_QQ_TOKEN` / `BEDROOM_QQ_SELF_ID`。
+- `test-qq.mjs`：保存、测试连接、鉴权、去重、进手机全链路验证。
+- README：SnowLuma 三步接入说明、窗口字段表、安全边界；audit 增至 117 条。
+
+### 变更
+
+- QQ 活动处理抽成 `handleQqActivity()`，聊天服务事件与 HTTP 上报共用同一条过滤逻辑。
+
 ## [2.0.0] - 2026-11-03
 
 首个开源准备版本（脱敏通用版）。

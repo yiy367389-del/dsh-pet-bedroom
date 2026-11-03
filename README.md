@@ -22,6 +22,7 @@
 - [配置项](#配置项)
 - [⚠️ 两块需要你自己接入的能力](#️-两块需要你自己接入的能力)
   - [QQ 部分](#qq-部分你需要接入自己的)
+    - [方案一：直接用「QQ 连接」窗口（默认 SnowLuma）](#方案一直接用页面上的qq-连接窗口默认-snowluma)
   - [抖音部分](#抖音部分你需要接入自己的)
 - [本项目引用了 dsh-pet 的哪些功能](#本项目引用了-dsh-pet-的哪些功能)
 - [页面与接口清单](#页面与接口清单)
@@ -49,6 +50,7 @@
 | 桌上日记 | 读聊天服务（默认 Aurabot）每天自己写的那篇，按天聚合，只读、不代写 |
 | 桌上笔记 | 读你记忆库里的 Markdown 读书笔记；agent 也能通过工具写新笔记 |
 | 手机 QQ | 手机界面里是真实的 QQ 会话与聊天记录，有真实头像；群聊标出发言人 |
+| QQ 连接窗口 | 右上角「QQ 连接」：填 SnowLuma 的 HTTP API 地址/令牌/主人 QQ，**真连一次**再保存；消息上报真的进手机 |
 | QQ 命令 | 主人在 QQ 私聊里说「睡觉 / 刷抖音 / 去电脑桌 / 看窗外」，桌宠在卧室里照做 |
 | 刷抖音 | 卧室里的「现在刷一轮」打的是你抖音后端的接口，拒绝就如实说理由，绝不假装在刷 |
 | 时辰天气 | 清晨/中午/下午/晚间 × 晴天/雨/雪，可跟着真实时间自动走 |
@@ -188,6 +190,10 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 | `douyinEnabled` | `true` | 是否允许卧室触发真实刷抖音 |
 | `allowAgentWrite` | `true` | 是否允许 agent 通过工具写笔记、改天气 |
 | `roomFile` | `$DSH_HOME/dsh-pet-bedroom/room.json` | 房间状态（时辰/天气/壁纸/家具）的持久化文件 |
+| `qqApiBase` | `http://127.0.0.1:3001` | QQ 连接窗口的默认 OneBot HTTP 地址（页面保存的值优先） |
+| `qqToken` | 空 | OneBot HTTP 令牌；只落本机，不回显 |
+| `qqSelfId` | 空 | 主人 QQ 号，只有它的私聊进卧室 |
+| `qqFile` | `$DSH_HOME/dsh-pet-bedroom/qq.json` | QQ 连接配置的持久化文件（权限 600） |
 
 对应的环境变量（优先级：显式配置 > 环境变量 > 默认值）：
 
@@ -197,6 +203,9 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 | `BEDROOM_CHAT_DIR` | 聊天数据目录（优先于 `AURABOT_DATA_DIR`） |
 | `AURABOT_DATA_DIR` | 兼容旧名：Aurabot 的数据目录 |
 | `BEDROOM_PET_ROUTE` | dsh-pet 路由前缀 |
+| `BEDROOM_QQ_API` | QQ 直连的 OneBot HTTP 地址（窗口未保存时的默认值） |
+| `BEDROOM_QQ_TOKEN` | QQ 直连的访问令牌 |
+| `BEDROOM_QQ_SELF_ID` | 主人 QQ 号 |
 | `DSH_HOME` | DSH 配置根目录（默认 `~/.dsh`） |
 
 > 路径里的 `~` 不会被自动展开，请写绝对路径（Windows 如 `D:\memory\vault`，
@@ -208,6 +217,10 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 
 **这两块不是插件自带的，每个人都不一样。** 仓库里只保留「约定」和「默认适配 Aurabot」，
 你需要按自己的环境接一个实现，或者干脆不接。
+
+QQ 有两条路：**不想写代码**就直接用页面右上角的「QQ 连接」窗口（默认 SnowLuma，见方案一）；
+**已经在用 Aurabot** 就什么都不用改（见方案二）；也可以自己实现一个聊天服务（方案三）。
+抖音只有一个接口约定，需要你后端实现（见下文）。
 
 不接也能用：房间、桌宠、日记/笔记、时辰天气、家具、壁纸都正常，
 只是手机 QQ 显示「还没有聊天记录」、抖音按钮如实说「没接上」。
@@ -292,12 +305,56 @@ ctx.provide('你的服务名', service);   // 然后用配置 chatService: '你�
 卧室按天聚合：同一天多篇取**最后一篇**当主日记，其余记进 `count`；
 点开能看到当天所有篇目（带时间小标题）。**只读，不代写**。
 
-#### 方案一：用现成的 Aurabot
+#### 方案一：直接用页面上的「QQ 连接」窗口（默认 SnowLuma）
+
+**不想写代码就用这个。** 卧室页面右上角有一个「QQ 连接」按钮，点开就是配置窗口：
+不用装 Aurabot，也不用改插件配置，填三个值、点两下就好。
+
+窗口里要填的：
+
+| 字段 | 填什么 | 默认 |
+|:--|:--|:--|
+| 后端 | 固定 **SnowLuma**（OneBot 11 协议；NapCat 等其他 OneBot 11 后端同样适用） | SnowLuma |
+| HTTP API 地址 | SnowLuma 面板「HTTP API」里显示的地址 | `http://127.0.0.1:3001` |
+| 访问令牌 | 你在 SnowLuma 里设的令牌；没设就留空 | 空 |
+| 主人 QQ | **你自己的 QQ 号**。只有这个号发来的私聊会进卧室 | 空 |
+| 消息上报地址 | 窗口自动按当前页面地址算好，点「复制」 | `<你的卧室地址>/qq/event` |
+
+在 SnowLuma 里的三步：
+
+1. 打开面板 →「HTTP API」：记下**端口**和**令牌**，与窗口里的地址/令牌保持一致；
+2. 「HTTP 上报」：地址填窗口里那条（结尾是 `/qq/event`），令牌同上，
+   消息类型至少勾上「私聊消息」；群聊消息可以一并上报，卧室会自己过滤掉；
+3. 回到卧室点「**测试连接**」——能看到机器人昵称和好友数就说明 HTTP API 通了；
+   再点「**保存**」，配置立即生效（不用重启）。
+
+保存后会发生什么（都是真的，不是演示）：
+
+- 主人私聊里说「睡觉 / 起床 / 刷抖音 / 去电脑桌 / 看手机 / 看窗外 / 自由活动 / 别刷了」，
+  桌宠在卧室里真的照做；
+- 每条主人私聊都会进「手机」的未读消息，同时追加一份流水到
+  `$DSH_HOME/dsh-pet-bedroom/qq-log/YYYY-MM-DD.jsonl`，手机聊天列表就能看到；
+- 别人私聊、群聊、图片/表情会被过滤（窗口状态行会显示「过滤 N」）。
+
+安全与边界：
+
+- 令牌只存在本机 `$DSH_HOME/dsh-pet-bedroom/qq.json`（权限 600），页面只显示
+  「已设置 / 未设置」，**永远不回显令牌**；
+- 上报接口会校验令牌（`Authorization: Bearer <令牌>`，也接受 `?access_token=`），
+  不匹配直接 401；
+- 卧室**不登录 QQ、不保存 QQ 密码**；QQ 登录态完全由 SnowLuma 自己管；
+- 同一条消息被 Aurabot 与直连同时上报时会按 `message_id` 去重，不会进两次。
+
+> 这些值也可以写进插件配置（`qqApiBase` / `qqToken` / `qqSelfId`）当默认值，
+> 或用环境变量 `BEDROOM_QQ_API` / `BEDROOM_QQ_TOKEN` / `BEDROOM_QQ_SELF_ID`；
+> 页面里保存的值优先。
+
+#### 方案二：用现成的 Aurabot
 
 如果你已经装了 `dsh-aurabot-qq`（Aurabot，经 SnowLuma / OneBot 接 QQ），
 它正好满足上面全部约定，服务名就是 `aurabot`，什么都不用改。
 
-#### 方案二：自己实现（最小示意）
+#### 方案三：自己实现（最小示意）
 
 ```js
 // 你自己的 QQ 插件（宿主半侧）
@@ -449,6 +506,10 @@ Aurabot 的刷抖音模块正好提供了这两个接口（`/aurabot/api/douyin/
 | POST | `/command` | 面板按钮/输入框 → 执行命令 |
 | POST | `/phone/read`、`/phone/off`、`/phone/say` | 手机已读/灭屏/说一句 |
 | POST | `/douyin/start`、`/douyin/stop` | 刷抖音（转给你后端） |
+| GET | `/qq` | QQ 连接状态（地址/主人号/是否已设令牌/最近测试结果；**不含令牌**） |
+| POST | `/qq/config` | 保存 QQ 连接配置（写 `qq.json`，立即生效） |
+| POST | `/qq/test` | 真调一次 OneBot `get_login_info` + `get_friend_list` |
+| POST | `/qq/event` | OneBot 11 HTTP 上报入口（校验令牌、按 `message_id` 去重、只收主人私聊） |
 
 ### 给 agent 的工具
 
@@ -477,12 +538,13 @@ dsh-pet-bedroom/
 │  ├─ chair.png          椅子前景层（坐电脑前挡住后背）
 │  └─ wall/*.jpg         手机壁纸（4 张）
 ├─ locale/zh.json|en.json 文案
-├─ audit.cjs             静态自检（104 条：尺寸、姿态、路由、配置项……）
+├─ audit.cjs             静态自检（117 条：尺寸、姿态、路由、配置项、QQ 窗口……）
 ├─ smoke.mjs             冒烟：页面/房间图/壁纸/日记/笔记/路径逃逸
 ├─ test-aurabot.mjs      端到端：QQ 过滤 / 日记聚合（假服务）
 ├─ test-phone.mjs        端到端：手机会话 / 抖音接口
 ├─ test-group.mjs        端到端：群聊标题与会话人
 ├─ test-config.mjs       端到端：通用接口（petRoute/petId/chatService/douyinApiBase）
+├─ test-qq.mjs           端到端：QQ 连接窗口（保存/测试连接/上报校验/去重/进手机）
 ├─ preview.mjs           独立预览服务器（不重启 DSH 验证页面改动）
 ├─ v-*.mjs               Playwright 可视验证（头像/拨号/群聊/壁纸/圆角）
 ├─ make-chair.py         从 room.png 抠椅子生成前景层
@@ -537,12 +599,13 @@ python register-chair.py    # 把新椅子图配准到房间坐标系（需要 s
 在项目目录里：
 
 ```bash
-node audit.cjs          # 104 条静态自检，必须 ALL PASS
+node audit.cjs          # 117 条静态自检，必须 ALL PASS
 node smoke.mjs          # 冒烟（临时目录，不碰真实数据）
 node test-aurabot.mjs   # 假聊天服务：QQ 过滤 + 日记聚合
 node test-phone.mjs     # 手机会话 + 抖音接口
 node test-group.mjs     # 群聊标题 + 发言人
 node test-config.mjs    # 通用接口：自定义 petRoute/chatService/douyinApiBase 全生效
+node test-qq.mjs        # QQ 连接窗口：保存/测试连接/上报鉴权/去重/进手机
 ```
 
 所有测试都是**隔离的**：临时目录 + 假服务 + 假 `fetch`，不会读写你的真实记忆库、
@@ -617,6 +680,9 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 
 ## 版本与演进
 
+- **v2.1.0**：新增「QQ 连接」窗口（默认 SnowLuma / OneBot 11）：页面里填 HTTP API
+  地址/令牌/主人 QQ，真连一次再保存；`/qq/event` 接收 HTTP 上报，校验令牌、按
+  `message_id` 去重、只收主人私聊，消息进手机并追加 `qq-log` 流水。
 - **v2.0.0（本仓库起点）**：脱敏通用版。引入 `petRoute` / `petId` / `vaultDir` /
   `notesDir` / `chatService` / `chatDataDir` / `chatApiBase` / `douyinApiBase` 等配置项，
   QQ 与抖音改为「按契约接入」；保留 v3 的独立网页架构与全部交互。

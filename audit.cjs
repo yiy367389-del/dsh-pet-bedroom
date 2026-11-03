@@ -156,6 +156,21 @@ const checks = {
   '记忆库路径可配置（无私人路径）': /BEDROOM_VAULT_DIR/.test(host) && !/D:[\\/]桌面/.test(host),
   'dsh-pet 路由可配置（petRoute）': /config\.petRoute/.test(host) && /PET_ROUTE/.test(host),
 
+  // ---- QQ 连接窗口（默认 SnowLuma / OneBot 11）----
+  'QQ 连接按钮存在': h.includes('id="btnQq"'),
+  'QQ 连接窗口存在': h.includes('id="qqWin"'),
+  'QQ 窗口默认 display:none': /\.qqwin\{[^}]*display:none/.test(h),
+  'QQ 窗口没有全屏遮罩': !h.includes('qqMask') && !/class="qq-[^"]*backdrop/.test(h),
+  '默认后端 SnowLuma + 3001': /QQ_DEFAULT_BASE = 'http:\/\/127\.0\.0\.1:3001'/.test(host),
+  '上报地址 = /qq/event': /reportPath: '\/qq\/event'/.test(host),
+  '令牌只回 hasToken（不回显）': /hasToken: Boolean\(qq\.token\)/.test(host),
+  '上报要校验令牌': /got !== qq\.token/.test(host),
+  '上报只收主人私聊': /uid !== qq\.selfId/.test(host) && /message_type === 'private'/.test(host),
+  '上报按 message_id 去重': /qqRuntime\.seen/.test(host),
+  'QQ 直连流水并入聊天列表': /\.\.\.readQqLog\(days\)/.test(host),
+  'QQ 窗口有测试连接与保存': h.includes('id="qqTest"') && h.includes('id="qqSave"'),
+  'QQ 窗口给得上报地址': h.includes('id="qqReport"'),
+
   '右键菜单容器': h.includes('id="ctxmenu"'),
   '右键 contextmenu 监听': h.includes("addEventListener('contextmenu'"),
   '待机随机演示定时器': h.includes('playDemo(name, 9000)'),

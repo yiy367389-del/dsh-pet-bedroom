@@ -145,6 +145,18 @@ export function apply(ctx, config = {}) {
     allowAgentWrite: config.allowAgentWrite !== false,
     /** 房间布局的持久化文件 */
     roomFile: typeof config.roomFile === 'string' && config.roomFile ? config.roomFile : '',
+    /**
+     * QQ 直连（出厂默认 SnowLuma）：OneBot 11 的 HTTP API 基地址。
+     * 空 = `BEDROOM_QQ_API` → `http://127.0.0.1:3001`（SnowLuma 默认端口）。
+     * 这是「QQ 连接窗口」里保存的值，页面改完立即生效，不用重启。
+     */
+    qqApiBase: typeof config.qqApiBase === 'string' && config.qqApiBase ? config.qqApiBase : '',
+    /** OneBot HTTP API 的访问令牌；空 = 不带鉴权（只建议本机使用） */
+    qqToken: typeof config.qqToken === 'string' ? config.qqToken : '',
+    /** 主人本人 QQ 号：只有它发来的私聊才算「主人的消息」 */
+    qqSelfId: typeof config.qqSelfId === 'string' ? config.qqSelfId : '',
+    /** QQ 连接配置的持久化文件 */
+    qqFile: typeof config.qqFile === 'string' && config.qqFile ? config.qqFile : '',
   };
 
   /** 记忆库根目录：显式配置 → BEDROOM_VAULT_DIR → $DSH_HOME/memory-vault（通用默认，不指向任何人的私人路径） */
@@ -224,6 +236,244 @@ export function apply(ctx, config = {}) {
     } catch {
       return false;
     }
+  }
+
+  // ==========================================================================
+  // QQ 连接：OneBot 11（出厂默认 SnowLuma）
+  //   配置窗口保存到 qq.json；页面改完立刻生效（每次请求都重新读）。
+  //   两个入口：
+  //     1) HTTP API：测试连接（get_login_info / get_friend_list）；
+  //     2) HTTP 上报：SnowLuma 把消息 POST 到 /qq/event，卧室据此进手机、执行命令。
+  //   令牌只落本机、只写不回显；日志里不打印。
+  // ==========================================================================
+  const qqPath = options.qqFile || path.join(dshHome, 'dsh-pet-bedroom', 'qq.json');
+  const QQ_PROVIDERS = ['snowluma', 'onebot'];
+  /** SnowLuma 的 OneBot HTTP 默认端口；以它面板里实际显示的为准 */
+  const QQ_DEFAULT_BASE = 'http://127.0.0.1:3001';
+
+  const qqRuntime = {
+    /** 最近一次「测试连接」的结果 */
+    lastTest: null,
+    /** 上报计数（只是给窗口显示「收到了几条」，不进任何档案） */
+    events: { total: 0, lastAt: 0, lastText: '', rejected: 0 },
+    /** message_id 去重，防止同一条被重复上报（Aurabot + 直连同时开时尤其重要） */
+    seen: new Map(),
+  };
+
+  /** 只接受 http(s) 地址，末尾斜杠去掉；不合法的返回空串 */
+  function sanitizeQqBase(value) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+      return url.toString().replace(/\/+$/, '');
+    } catch {
+      return '';
+    }
+  }
+
+  function readQq() {
+    const envBase = sanitizeQqBase(process.env.BEDROOM_QQ_API);
+    const defaults = {
+      version: 1,
+      provider: 'snowluma',
+      apiBase: options.qqApiBase || envBase || QQ_DEFAULT_BASE,
+      token: options.qqToken || process.env.BEDROOM_QQ_TOKEN || '',
+      selfId: String(options.qqSelfId || process.env.BEDROOM_QQ_SELF_ID || '').replace(/\D/g, '').slice(0, 12),
+      allowGroup: false,
+      enabled: true,
+    };
+    let raw = null;
+    try {
+      const text = readText(qqPath, 200_000);
+      raw = text ? JSON.parse(text) : null;
+    } catch {
+      raw = null;
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return defaults;
+    return {
+      version: 1,
+      provider: QQ_PROVIDERS.includes(raw.provider) ? raw.provider : 'snowluma',
+      apiBase: sanitizeQqBase(raw.apiBase) || defaults.apiBase,
+      token: typeof raw.token === 'string' ? raw.token : defaults.token,
+      selfId: /^\d{5,12}$/.test(String(raw.selfId ?? '')) ? String(raw.selfId) : defaults.selfId,
+      allowGroup: raw.allowGroup === true,
+      enabled: raw.enabled !== false,
+    };
+  }
+
+  /** 合并写入 qq.json；返回 false 表示没写成功（窗口会如实显示） */
+  function writeQq(patch) {
+    const next = { ...readQq(), ...(patch && typeof patch === 'object' ? patch : {}) };
+    try {
+      fs.mkdirSync(path.dirname(qqPath), { recursive: true });
+      const tmp = qqPath + '.' + process.pid + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
+      fs.renameSync(tmp, qqPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** QQ 上报/直连收到的消息落一份自己的流水（手机聊天列表用得到，且不污染聊天服务的数据） */
+  const qqLogDir = () => path.join(dshHome, 'dsh-pet-bedroom', 'qq-log');
+
+  function appendQqLog(rec) {
+    try {
+      const t = Number(rec.t) || Date.now();
+      const day = new Date(t).toLocaleDateString('sv-SE');
+      fs.mkdirSync(qqLogDir(), { recursive: true });
+      fs.appendFileSync(
+        path.join(qqLogDir(), day + '.jsonl'),
+        JSON.stringify({ t, chatId: rec.chatId, who: rec.who, uid: rec.uid, text: rec.text }) + '\n',
+        { mode: 0o600 },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function readQqLog(days = 3) {
+    let names = [];
+    try {
+      names = fs
+        .readdirSync(qqLogDir())
+        .filter((f) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f))
+        .sort()
+        .slice(-Math.max(1, days));
+    } catch {
+      return [];
+    }
+    const out = [];
+    for (const name of names) {
+      const raw = readText(path.join(qqLogDir(), name), 4_000_000);
+      if (raw === null) continue;
+      for (const line of raw.split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const item = JSON.parse(line);
+          const t = Number(item?.t);
+          if (!Number.isFinite(t)) continue;
+          out.push({
+            t,
+            chatId: String(item.chatId ?? ''),
+            who: String(item.who ?? ''),
+            uid: String(item.uid ?? ''),
+            text: String(item.text ?? ''),
+          });
+        } catch {
+          /* 坏行跳过 */
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 调一次 OneBot 11 HTTP API。POST 优先（SnowLuma / NapCat 都支持），
+   * 404/405 时退回 GET（少数实现只认 GET）。
+   */
+  async function oneBotApi(method, { apiBase, token, timeout = 5000, body } = {}) {
+    const qq = readQq();
+    const base = sanitizeQqBase(apiBase || qq.apiBase);
+    if (!base) return { ok: false, error: '还没填 OneBot HTTP 地址' };
+    const tok = token === undefined ? qq.token : token;
+    const payload = JSON.stringify(body ?? {});
+    const headers = { 'content-type': 'application/json' };
+    if (tok) headers.authorization = 'Bearer ' + tok;
+
+    const attempt = async (httpMethod, withQuery) => {
+      const url = base + '/' + method + (withQuery && tok ? '?access_token=' + encodeURIComponent(tok) : '');
+      const init = { method: httpMethod, headers, signal: AbortSignal.timeout(timeout) };
+      if (httpMethod === 'POST') init.body = payload;
+      return fetch(url, init);
+    };
+
+    try {
+      let res = await attempt('POST', false);
+      if (res.status === 404 || res.status === 405) {
+        try {
+          res = await attempt('GET', true);
+        } catch {
+          /* 保持第一次的响应 */
+        }
+      }
+      const text = await res.text();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+      if (!res.ok) {
+        const said = data?.wording || data?.message || text.slice(0, 160) || 'HTTP ' + res.status;
+        return { ok: false, status: res.status, error: String(said) };
+      }
+      if (!data || typeof data !== 'object') {
+        return { ok: false, status: res.status, error: '返回的不是 JSON —— 这个地址可能不是 OneBot HTTP API' };
+      }
+      if (data.status === 'failed' || Number(data.retcode) !== 0) {
+        return { ok: false, status: res.status, error: String(data.wording || data.message || 'retcode ' + data.retcode) };
+      }
+      return { ok: true, data };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        error: /timeout|abort/i.test(msg) ? '连接超时：后端没启动，或者地址/端口不对' : msg,
+      };
+    }
+  }
+
+  /** 测试连接：拿登录信息 + 好友数，把结果记在内存里给窗口显示 */
+  async function testQq(over = {}) {
+    const qq = readQq();
+    const apiBase = sanitizeQqBase(over.apiBase || qq.apiBase);
+    const token = over.token === undefined ? qq.token : String(over.token);
+    const login = await oneBotApi('get_login_info', { apiBase, token, timeout: 6000 });
+    if (!login.ok) {
+      qqRuntime.lastTest = { ok: false, at: now(), error: login.error };
+      return { ok: false, apiBase, error: login.error };
+    }
+    const d = login.data?.data && typeof login.data.data === 'object' ? login.data.data : login.data;
+    const uin = String(d?.user_id ?? d?.uin ?? '');
+    const nickname = String(d?.nickname ?? d?.nick ?? '');
+    let friendCount = null;
+    const friends = await oneBotApi('get_friend_list', { apiBase, token, timeout: 6000 });
+    if (friends.ok) {
+      const list = Array.isArray(friends.data?.data) ? friends.data.data : Array.isArray(friends.data) ? friends.data : null;
+      friendCount = list ? list.length : null;
+    }
+    qqRuntime.lastTest = { ok: true, at: now(), uin, nickname, friendCount };
+    return { ok: true, apiBase, uin, nickname, friendCount };
+  }
+
+  /** 给窗口的状态快照（永远不包括令牌本身） */
+  function qqInfo(origin) {
+    const qq = readQq();
+    return {
+      ok: true,
+      provider: qq.provider,
+      apiBase: qq.apiBase,
+      selfId: qq.selfId,
+      hasToken: Boolean(qq.token),
+      enabled: qq.enabled,
+      allowGroup: qq.allowGroup,
+      reportPath: '/qq/event',
+      reportUrl: origin ? origin + '/dsh-pet-bedroom/qq/event' : '',
+      connected: qqRuntime.lastTest,
+      events: {
+        total: qqRuntime.events.total,
+        lastAt: qqRuntime.events.lastAt,
+        lastText: qqRuntime.events.lastText,
+        rejected: qqRuntime.events.rejected,
+      },
+      logDir: qqLogDir(),
+      defaultBase: QQ_DEFAULT_BASE,
+    };
   }
 
   /** 真实时间 → 时辰。autoTime 打开时窗外环境跟着真实时间走。 */
@@ -389,7 +639,7 @@ export function apply(ctx, config = {}) {
         .sort()
         .slice(-Math.max(1, days));
     } catch {
-      return [];
+      names = [];
     }
     const out = [];
     for (const name of names) {
@@ -413,7 +663,17 @@ export function apply(ctx, config = {}) {
         }
       }
     }
-    return out.sort((a, b) => a.t - b.t);
+    // QQ 直连（SnowLuma 的 HTTP 上报）也落了自己的流水，这里并进来：
+    // 两套通道同时开着时，同一条消息可能两边都有，按 (会话 + 时间 + 正文) 去重。
+    const seen = new Set();
+    const merged = [];
+    for (const m of [...out, ...readQqLog(days)]) {
+      const key = m.chatId + '\u0000' + m.t + '\u0000' + m.text;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(m);
+    }
+    return merged.sort((a, b) => a.t - b.t);
   }
 
   /**
@@ -958,6 +1218,114 @@ export function apply(ctx, config = {}) {
     return item;
   }
 
+  /**
+   * 「主人私聊」的统一入口：聊天服务的 activity 事件、以及 QQ 直连的 HTTP 上报，
+   * 都从这里进卧室。只认 kind=in + owner=true + direct=true；群聊、别人的私聊一律不进。
+   * 返回 false 表示这条被过滤掉了（调用方可以据此如实回话）。
+   */
+  function handleQqActivity(a) {
+    if (!a || a.kind !== 'in') return false;          // 只收「收到」，不收她发出去的
+    if (a.owner !== true) return false;               // 只认主人本人
+    if (a.direct !== true) return false;              // 只认私聊，群聊不要
+    const body = String(a.text ?? '').trim();
+    if (!body) return false;
+    const action = parseCommand(body);
+    const chatId = String(a.chatId ?? '');
+    pushPhoneMessage({ text: body.slice(0, 500), action, sessionId: chatId, channel: 'qq' });
+    if (action) void runCommand(action, body, 'qq').catch(() => {});
+    return true;
+  }
+
+  /** 从 OneBot 消息体里取纯文本：优先 message 段里的 text，退回 raw_message */
+  function oneBotText(body) {
+    const segments = Array.isArray(body.message) ? body.message : null;
+    if (segments) {
+      const text = segments
+        .filter((seg) => seg && seg.type === 'text')
+        .map((seg) => String(seg.data?.text ?? ''))
+        .join('')
+        .trim();
+      if (text) return text;
+    }
+    return String(body.raw_message ?? '').trim();
+  }
+
+  /**
+   * OneBot 11 的 HTTP 上报入口（SnowLuma 面板里的「HTTP 上报」填这里）。
+   *
+   * 只处理 post_type=message；心跳/通知一律 ack。校验令牌（配了才校验）、
+   * 按 message_id 去重（Aurabot 与直连同时开时同一条会到两次）。
+   * 不是「主人的私聊」就只回一个 accepted:false + 原因，不进卧室、不落盘。
+   */
+  async function handleOneBotReport(req, res, url) {
+    const qq = readQq();
+    if (qq.token) {
+      const auth = String(req.headers?.authorization ?? '');
+      const got = /^bearer\s+/i.test(auth)
+        ? auth.replace(/^bearer\s+/i, '').trim()
+        : String(url?.searchParams?.get('access_token') ?? '');
+      if (got !== qq.token) {
+        qqRuntime.events.rejected += 1;
+        return writeJson(res, 401, { ok: false, error: '上报令牌和窗口里填的不一致' });
+      }
+    }
+
+    const body = await readJsonBody(req, 512 * 1024);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return writeJson(res, 400, { ok: false, error: '上报体不是 JSON' });
+    }
+    if (body.post_type !== 'message') return writeJson(res, 200, { ok: true, ignored: true });
+
+    const messageId = String(body.message_id ?? '');
+    if (messageId) {
+      const prev = qqRuntime.seen.get(messageId);
+      if (prev && Date.now() - prev < 60_000) {
+        return writeJson(res, 200, { ok: true, duplicate: true });
+      }
+      qqRuntime.seen.set(messageId, Date.now());
+      if (qqRuntime.seen.size > 600) {
+        for (const [key, at] of qqRuntime.seen) {
+          if (Date.now() - at > 120_000) qqRuntime.seen.delete(key);
+        }
+      }
+    }
+
+    const uid = String(body.sender?.user_id ?? body.user_id ?? '');
+    const direct = body.message_type === 'private';
+    const text = oneBotText(body);
+
+    if (!qq.selfId) {
+      qqRuntime.events.rejected += 1;
+      return writeJson(res, 200, { ok: true, accepted: false, reason: '窗口里还没填「主人 QQ」' });
+    }
+    if (uid !== qq.selfId) {
+      qqRuntime.events.rejected += 1;
+      return writeJson(res, 200, { ok: true, accepted: false, reason: '不是主人本人，不进卧室' });
+    }
+    if (!direct) {
+      qqRuntime.events.rejected += 1;
+      return writeJson(res, 200, { ok: true, accepted: false, reason: '群聊不进卧室（只收私聊）' });
+    }
+    if (!text) {
+      qqRuntime.events.rejected += 1;
+      return writeJson(res, 200, { ok: true, accepted: false, reason: '这条没有文字（图片/表情不进卧室）' });
+    }
+
+    const chatId = 'private:' + uid;
+    appendQqLog({
+      t: Number(body.time ? Number(body.time) * 1000 : Date.now()),
+      chatId,
+      who: String(body.sender?.card || body.sender?.nickname || uid).slice(0, 60),
+      uid,
+      text: text.slice(0, 500),
+    });
+    const accepted = handleQqActivity({ kind: 'in', owner: true, direct: true, text, chatId });
+    qqRuntime.events.total += 1;
+    qqRuntime.events.lastAt = now();
+    qqRuntime.events.lastText = text.slice(0, 60);
+    return writeJson(res, 200, { ok: true, accepted });
+  }
+
   ctx.effect(() => {
     /**
      * QQ 消息从 **聊天服务的 activity 事件**来（出厂适配 Aurabot，经 SnowLuma / OneBot 接的 QQ），
@@ -967,17 +1335,7 @@ export function apply(ctx, config = {}) {
      * 两个布尔标记（见 Aurabot hub.js 的 onActivity），比自己解析文本可靠得多。
      * 群聊、别人的私聊一律不进卧室。
      */
-    const onActivity = (a) => {
-      if (!a || a.kind !== 'in') return;          // 只收「收到」，不收她发出去的
-      if (a.owner !== true) return;               // 只认主人本人
-      if (a.direct !== true) return;              // 只认私聊，群聊不要
-      const body = String(a.text ?? '').trim();
-      if (!body) return;
-      const action = parseCommand(body);
-      const chatId = String(a.chatId ?? '');
-      pushPhoneMessage({ text: body.slice(0, 500), action, sessionId: chatId, channel: 'qq' });
-      if (action) void runCommand(action, body, 'qq').catch(() => {});
-    };
+    const onActivity = handleQqActivity;
 
     let off = null;
     const attach = () => {
@@ -1489,6 +1847,7 @@ export function apply(ctx, config = {}) {
             command: roomState.command,
             say: roomState.say,
             douyin,
+            qq: qqInfo(origin),
             options: { douyinEnabled: options.douyinEnabled, phoneSource: options.phoneSource, petId: options.petId },
           });
         }
@@ -1612,6 +1971,53 @@ export function apply(ctx, config = {}) {
 
         if (req.method === 'POST' && p === '/douyin/start') return writeJson(res, 200, await startDouyin());
         if (req.method === 'POST' && p === '/douyin/stop') return writeJson(res, 200, await stopDouyin());
+
+        // ---------------- QQ 连接窗口（默认 SnowLuma / OneBot 11） ----------------
+        if (req.method === 'GET' && p === '/qq') {
+          return writeJson(res, 200, qqInfo(origin));
+        }
+
+        if (req.method === 'POST' && p === '/qq/config') {
+          const body = await readJsonBody(req);
+          const patch = {};
+          if (body.provider !== undefined) {
+            if (!QQ_PROVIDERS.includes(body.provider)) {
+              return writeJson(res, 400, { ok: false, error: '不认识的 QQ 后端类型' });
+            }
+            patch.provider = body.provider;
+          }
+          if (body.apiBase !== undefined) {
+            const base = sanitizeQqBase(body.apiBase);
+            if (!base) return writeJson(res, 400, { ok: false, error: '地址要 http(s):// 开头，例如 http://127.0.0.1:3001' });
+            patch.apiBase = base;
+          }
+          // 令牌：不传 = 保持原样；传空串 = 明确清空。永远不把令牌回显给页面。
+          if (body.token !== undefined) patch.token = String(body.token ?? '').trim().slice(0, 200);
+          if (body.selfId !== undefined) {
+            const id = String(body.selfId ?? '').replace(/\D/g, '');
+            if (id && !/^\d{5,12}$/.test(id)) return writeJson(res, 400, { ok: false, error: '主人 QQ 应该是 5–12 位数字' });
+            patch.selfId = id;
+          }
+          if (body.allowGroup !== undefined) patch.allowGroup = body.allowGroup === true;
+          if (body.enabled !== undefined) patch.enabled = body.enabled !== false;
+          const saved = writeQq(patch);
+          return writeJson(res, 200, { ok: saved, ...qqInfo(origin), error: saved ? '' : '写不进 qq.json（检查目录权限）' });
+        }
+
+        if (req.method === 'POST' && p === '/qq/test') {
+          const body = await readJsonBody(req);
+          // 允许「先测再存」：带上页面里还没保存的值
+          const over = {};
+          if (body.apiBase !== undefined) over.apiBase = body.apiBase;
+          if (body.token !== undefined) over.token = String(body.token);
+          const result = await testQq(over);
+          return writeJson(res, 200, { ...result, ...qqInfo(origin) });
+        }
+
+        // SnowLuma 的「HTTP 上报」填这个地址；也接受 access_token 查询参数
+        if (req.method === 'POST' && p === '/qq/event') {
+          return handleOneBotReport(req, res, url);
+        }
 
         return writeJson(res, 404, { ok: false, error: '没有这个地址：' + p });
       } catch (error) {
