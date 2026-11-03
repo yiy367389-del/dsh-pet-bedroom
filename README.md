@@ -477,7 +477,7 @@ dsh-pet-bedroom/
 │  ├─ chair.png          椅子前景层（坐电脑前挡住后背）
 │  └─ wall/*.jpg         手机壁纸（4 张）
 ├─ locale/zh.json|en.json 文案
-├─ audit.cjs             静态自检（99 条：尺寸、姿态、路由、配置项……）
+├─ audit.cjs             静态自检（104 条：尺寸、姿态、路由、配置项……）
 ├─ smoke.mjs             冒烟：页面/房间图/壁纸/日记/笔记/路径逃逸
 ├─ test-aurabot.mjs      端到端：QQ 过滤 / 日记聚合（假服务）
 ├─ test-phone.mjs        端到端：手机会话 / 抖音接口
@@ -537,7 +537,7 @@ python register-chair.py    # 把新椅子图配准到房间坐标系（需要 s
 在项目目录里：
 
 ```bash
-node audit.cjs          # 99 条静态自检，必须 ALL PASS
+node audit.cjs          # 104 条静态自检，必须 ALL PASS
 node smoke.mjs          # 冒烟（临时目录，不碰真实数据）
 node test-aurabot.mjs   # 假聊天服务：QQ 过滤 + 日记聚合
 node test-phone.mjs     # 手机会话 + 抖音接口
