@@ -3,6 +3,25 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.2.0] - 2026-11-03
+
+按 awesome-dsh-plugin 收录指南整理发布形态：每个版本都有可直接下载的 Release。
+
+### 新增
+
+- GitHub Releases：v2.0.0 / v2.1.0 / v2.2.0 各挂一个预构建 `dsh-pet-bedroom.tgz`；
+  资产名不带版本号，`releases/latest/download/dsh-pet-bedroom.tgz` 永远有效。
+- `release.mjs`：`node release.mjs [--tag vX.Y.Z] [--dry-run]` 从指定 tag 打包并发 Release。
+- `.github/workflows/release.yml`：推 `v*` tag 自动打包、发 Release、上传资产。
+- `screenshots.json` + `assets/screenshot-room.jpg`、`assets/screenshot-qq.jpg`、`assets/icon-180.png`：
+  市场卡片与截图所需的 GitHub 托管位图。
+- `package.json`：补 `repository` / `homepage` / `bugs` / `keywords`，`files` 纳入截图与变更记录。
+- `.github/awesome-plugin-entry.yml`：收录条目草稿（含 `tarball` 与 `icon` 字段）。
+
+### 变更
+
+- 安装方式补上「从 Release 一行安装」，源码安装仍可用。
+
 ## [2.1.0] - 2026-11-03
 
 QQ 连接窗口（默认 SnowLuma）。

@@ -18,3 +18,7 @@ _new-chair.png
 # 编辑器
 .vscode/
 .idea/
+
+# 发版产物
+dist/
+

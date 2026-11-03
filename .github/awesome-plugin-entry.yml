@@ -1,0 +1,17 @@
+# 提交到 awesome-dsh-plugin 的条目草稿
+#
+# 用法：在 https://github.com/awesome-dsh-plugin/awesome-dsh-plugin 提 PR，
+# 新增文件 data/plugins/yiy367389-del__dsh-pet-bedroom.yml 内容即本文件（去掉注释）。
+# 仓库名/owner 必须与实际完全一致；一个 PR 只加这一条。
+#
+# 说明：本仓库已满足 dsh.bundle、真实代码、dsh-plugin topic 三项；
+# 「仓库创建满 1 天」由 CI 自动判定，创建当天提交会显示未达标，次日再提交即可。
+
+url: https://github.com/yiyi367389-del/dsh-pet-bedroom
+name: yiyi367389-del/dsh-pet-bedroom
+category: ui
+description:
+  en: A standalone bedroom web page where your dsh-pet desktop pet moves around, showing its real diary, notes and QQ chats; QQ (SnowLuma / OneBot 11) and Douyin connect through your own backends.
+  zh: 一个独立网页卧室：dsh-pet 的桌宠在房间里活动，展示真实的日记、笔记与 QQ 聊天；QQ（SnowLuma / OneBot 11）与抖音按接口接入你自己的后端。
+icon: https://raw.githubusercontent.com/yiyi367389-del/dsh-pet-bedroom/main/assets/icon-180.png
+tarball: https://github.com/yiyi367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pet-bedroom.tgz

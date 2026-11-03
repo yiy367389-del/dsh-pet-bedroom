@@ -18,6 +18,7 @@
 - [先看效果](#先看效果)
 - [名词表](#名词表)
 - [前置条件](#前置条件)
+- [下载与安装](#下载与安装)
 - [快速开始](#快速开始)
 - [配置项](#配置项)
 - [⚠️ 两块需要你自己接入的能力](#️-两块需要你自己接入的能力)
@@ -31,6 +32,7 @@
 - [本地验证](#本地验证)
 - [安全与边界](#安全与边界)
 - [常见问题](#常见问题)
+- [收录与市场](#收录与市场awesome-dsh-plugin)
 - [版本与演进](#版本与演进)
 - [许可与贡献](#许可与贡献)
 
@@ -61,6 +63,10 @@
 QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 
 ![房间预览](assets/room.png)
+
+![卧室与桌宠](assets/screenshot-room.jpg)
+
+![QQ 连接窗口](assets/screenshot-qq.jpg)
 
 ---
 
@@ -102,6 +108,43 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 5. （可选）**抖音接入**：你自己的刷抖音 HTTP 后端（见 [抖音部分](#抖音部分你需要接入自己的)）。
 
 ---
+
+## 下载与安装
+
+每个版本都在 [GitHub Releases](https://github.com/yiyi367389-del/dsh-pet-bedroom/releases) 提供**预构建包**，
+不用装依赖、不用构建、不用改任何源码：
+
+| 版本 | 内容 |
+|:--|:--|
+| [v2.2.0](https://github.com/yiyi367389-del/dsh-pet-bedroom/releases/tag/v2.2.0) | 发布形态整理：Releases 资产、截图、`release.mjs`、发版工作流 |
+| [v2.1.0](https://github.com/yiyi367389-del/dsh-pet-bedroom/releases/tag/v2.1.0) | 新增「QQ 连接」窗口（默认 SnowLuma / OneBot 11）与 `/qq/event` 上报 |
+| [v2.0.0](https://github.com/yiyi367389-del/dsh-pet-bedroom/releases/tag/v2.0.0) | 首个脱敏通用版（MIT） |
+
+最新一版（链接永远有效）：
+
+```text
+https://github.com/yiyi367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pet-bedroom.tgz
+```
+
+一行安装：
+
+```bash
+dsh plugin add https://github.com/yiyi367389-del/dsh-pet-bedroom/releases/download/v2.2.0/dsh-pet-bedroom.tgz
+```
+
+想固定某个版本就把 URL 里的 `v2.2.0` 换成对应 tag；想始终跟最新就把整段换成
+`releases/latest/download/dsh-pet-bedroom.tgz`。
+
+从源码安装（改代码时用）：
+
+```bash
+git clone https://github.com/yiyi367389-del/dsh-pet-bedroom.git
+dsh plugin add ./dsh-pet-bedroom
+```
+
+> 维护者发版：`node release.mjs --tag vX.Y.Z` 会从该 tag 打包并上传资产；
+> 推 `v*` tag 时 `.github/workflows/release.yml` 也会自动发一版。资产文件名固定
+> `dsh-pet-bedroom.tgz`，所以 `latest/download/` 不会因为版本号变更而 404。
 
 ## 快速开始
 
@@ -531,14 +574,22 @@ dsh-pet-bedroom/
 ├─ index.js              宿主半侧：HTTP 路由、读日记/笔记/聊天流水、工具、QQ 事件
 ├─ client.js             浏览器半侧：只在侧边栏加一个「卧室」按钮（不挂浮层）
 ├─ cordis.patch.yml      插件插入项（id / name）
-├─ package.json          包信息与 exports
+├─ package.json          包信息、dsh.bundle 清单、exports
+├─ screenshots.json      市场截图清单（2 张，路径相对本文件）
 ├─ web/index.html        卧室页面（单文件：HTML + CSS + JS）
 ├─ assets/
 │  ├─ room.png           房间图（1536×1024）
 │  ├─ chair.png          椅子前景层（坐电脑前挡住后背）
+│  ├─ icon-180.png       市场卡片图标（180×180 位图）
+│  ├─ screenshot-room.jpg 卧室截图（房间 + 桌宠）
+│  ├─ screenshot-qq.jpg  「QQ 连接」窗口截图
 │  └─ wall/*.jpg         手机壁纸（4 张）
+├─ .github/
+│  ├─ workflows/release.yml  推 v* tag 自动发 Release
+│  └─ awesome-plugin-entry.yml 收录条目草稿（含 icon/tarball）
+├─ release.mjs            发版：从 tag 打包 + 建 Release + 上传资产
 ├─ locale/zh.json|en.json 文案
-├─ audit.cjs             静态自检（117 条：尺寸、姿态、路由、配置项、QQ 窗口……）
+├─ audit.cjs             静态自检（124 条：尺寸、姿态、路由、配置项、QQ 窗口……）
 ├─ smoke.mjs             冒烟：页面/房间图/壁纸/日记/笔记/路径逃逸
 ├─ test-aurabot.mjs      端到端：QQ 过滤 / 日记聚合（假服务）
 ├─ test-phone.mjs        端到端：手机会话 / 抖音接口
@@ -599,7 +650,7 @@ python register-chair.py    # 把新椅子图配准到房间坐标系（需要 s
 在项目目录里：
 
 ```bash
-node audit.cjs          # 117 条静态自检，必须 ALL PASS
+node audit.cjs          # 124 条静态自检，必须 ALL PASS
 node smoke.mjs          # 冒烟（临时目录，不碰真实数据）
 node test-aurabot.mjs   # 假聊天服务：QQ 过滤 + 日记聚合
 node test-phone.mjs     # 手机会话 + 抖音接口
@@ -678,8 +729,34 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 
 ---
 
+## 收录与市场（awesome-dsh-plugin）
+
+按 [awesome-dsh-plugin 贡献指南](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md)
+逐项对照，本仓库的现状：
+
+| 要求 | 状态 |
+|:--|:--|
+| `package.json` 声明 `dsh.bundle`（含 `patch`） | ✅ `"bundle": { "patch": "./cordis.patch.yml" }`，且 `cordis.patch.yml` 在仓库根 |
+| 真实可用的代码（非占位/纯 README） | ✅ 124 条静态自检 + 7 套端到端测试全部通过 |
+| 仓库创建满 1 天 | ⏳ 仓库创建于 2026-11-03，次日达标（CI 自动判定，无需改代码） |
+| 添加 `dsh-plugin` topic | ✅ 已添加 |
+| 描述只讲功能、不夸大 | ✅ 条目描述与代码逐项对应（QQ 窗口 / 抖音接口 / 日记笔记 / 6 个工具） |
+| 可选：预构建 `tarball` | ✅ 每个 Release 都挂 `dsh-pet-bedroom.tgz`，条目里用 `latest/download` |
+| 可选：市场截图 `screenshots.json` | ✅ 2 张（`assets/screenshot-room.jpg`、`assets/screenshot-qq.jpg`） |
+| 可选：市场图标 | ✅ `assets/icon-180.png`（GitHub 托管位图，非 SVG） |
+
+收录条目草稿在 [`.github/awesome-plugin-entry.yml`](.github/awesome-plugin-entry.yml)：
+提交到对方仓库时，新增 `data/plugins/yiy367389-del__dsh-pet-bedroom.yml`，内容即该文件（去掉注释），
+一个 PR 只加这一条。
+
+---
+
 ## 版本与演进
 
+- **v2.2.0**：按收录指南整理发布形态。每个版本都有 Release 预构建包
+  （`dsh-pet-bedroom.tgz`，文件名不带版本号）；新增 `release.mjs`、发版工作流、
+  市场截图与 180×180 图标；`package.json` 补 `repository` / `homepage` / `bugs` / `keywords`；
+  已验证 `dsh plugin add <tgz>` 会把插件写进 profile 并自动登记到 `dsh.profile.bundles`。
 - **v2.1.0**：新增「QQ 连接」窗口（默认 SnowLuma / OneBot 11）：页面里填 HTTP API
   地址/令牌/主人 QQ，真连一次再保存；`/qq/event` 接收 HTTP 上报，校验令牌、按
   `message_id` 去重、只收主人私聊，消息进手机并追加 `qq-log` 流水。

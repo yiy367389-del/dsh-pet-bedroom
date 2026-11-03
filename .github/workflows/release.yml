@@ -1,0 +1,47 @@
+name: release
+
+# 每次推 v* tag 就发一版：构建预构建 tarball 并挂到 GitHub Releases。
+# 资产名固定 dsh-pet-bedroom.tgz，所以 releases/latest/download/dsh-pet-bedroom.tgz 永远有效。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 构建 tarball
+        run: |
+          npm pack --pack-destination dist
+          cp dist/*.tgz dist/dsh-pet-bedroom.tgz
+          ls -l dist
+
+      - name: 发 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > release-notes.md <<EOF
+          安装：
+
+          \`\`\`bash
+          dsh plugin add $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/dsh-pet-bedroom.tgz
+          \`\`\`
+
+          变更见仓库 CHANGELOG.md 的 $TAG 小节。
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/dsh-pet-bedroom.tgz --clobber
+          else
+            gh release create "$TAG" dist/dsh-pet-bedroom.tgz --title "$TAG" --notes-file release-notes.md
+          fi

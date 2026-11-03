@@ -1,6 +1,10 @@
 const fs = require('fs');
 const h = fs.readFileSync('web/index.html', 'utf8');
 const host = fs.readFileSync('index.js', 'utf8');
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const patch = fs.readFileSync('cordis.patch.yml', 'utf8');
+const shotsRaw = JSON.parse(fs.readFileSync('screenshots.json', 'utf8'));
+const shots = Array.isArray(shotsRaw) ? shotsRaw : shotsRaw.screenshots;
 
 // 1) 抽出 <script> 内容做语法检查（用 Function 构造器解析，不执行）
 const m = h.match(/<script>([\s\S]*)<\/script>/);
@@ -24,6 +28,15 @@ const widthPct = widthMatch ? Number(widthMatch[1]) : NaN;
 const charPct = widthPct * 0.338;
 
 const checks = {
+  // ---- 收录 / 发版形态（awesome-dsh-plugin 指南）----
+  'package.json 声明 dsh.bundle.patch': pkg?.dsh?.bundle?.patch === './cordis.patch.yml',
+  'cordis.patch.yml 有 insert 与唯一条目 id': /insert:/.test(patch) && /id: dsh-pet-bedroom/.test(patch),
+  'package.json 有 GitHub repository': /github\.com\/[^/]+\/dsh-pet-bedroom/.test(String(pkg?.repository?.url || '')),
+  '截图清单 1–8 张且文件都在': Array.isArray(shots) && shots.length >= 1 && shots.length <= 8 && shots.every((p) => fs.existsSync(p)),
+  '市场图标是位图（不是 SVG）': fs.existsSync('assets/icon-180.png'),
+  'release.mjs 使用固定资产名': /dsh-pet-bedroom\.tgz/.test(fs.readFileSync('release.mjs', 'utf8')),
+  '发版工作流存在且推 tag 触发': /tags:\s*[\s\S]*v\*/.test(fs.readFileSync('.github/workflows/release.yml', 'utf8')),
+
   '容器宽度是字面常量（不随进深变）': Boolean(widthMatch),
   [`角色约占舞台 ${charPct.toFixed(1)}%（目标 14%）`]: Math.abs(charPct - 14) <= 0.6,
   '没有 depth 造成的缩放': !h.includes('66 + depth * 6'),
