@@ -1,6 +1,6 @@
 {
   "name": "dsh-pet-bedroom",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -57,6 +57,7 @@
     "test-qq.mjs",
     "test-qq-fail.mjs",
     "preview.mjs",
+    "start-trial.ps1",
     "v-*.mjs",
     "make-chair.py",
     "register-chair.py",

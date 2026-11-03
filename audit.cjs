@@ -64,6 +64,14 @@ const checks = {
   '收录条目 tarball 用 latest/download': /tarball: https:\/\/github\.com\/[^\s]+\/releases\/latest\/download\/dsh-pet-bedroom\.tgz/
     .test(fs.readFileSync('.github/awesome-plugin-entry.yml', 'utf8')),
   '收录条目自检脚本存在': fs.existsSync('test-entry.cjs'),
+  // 试用启动脚本必须带 UTF-8 BOM：Windows PowerShell 5.1 会把无 BOM 的 UTF-8 当 ANSI 读，
+  // 中文注释直接把块结构读崩（实测报 Missing closing '}'，行号还指到无关的行）。
+  '试用启动脚本存在且带 UTF-8 BOM': (() => {
+    if (!fs.existsSync('start-trial.ps1')) return false;
+    const b = fs.readFileSync('start-trial.ps1');
+    return b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf;
+  })(),
+  '试用启动脚本已随包发布': (pkg.files || []).includes('start-trial.ps1'),
   'Release 说明补齐脚本存在': fs.existsSync('release-notes.mjs'),
   '发版工作流会补齐 Release 说明': /node release-notes\.mjs/.test(fs.readFileSync('.github/workflows/release.yml', 'utf8')),
 
@@ -249,19 +257,13 @@ const checks = {
 };
 
 // ---- 文档数字必须与实测一致（防止「说明里写 7 套、实际 6 套」这类漂移）----
-// 这段在循环之后跑：此时 Object.keys(checks).length 就是上面印出的 OK/FAIL 行数，
-// 本段自己再印一行，所以 README 里声明的条数应当等于「已印行数 + 1」。
+// 做法：所有断言都先收集成「名字 → 布尔」，统一印出来时**顺便数行**，
+// 最后再拿行数比对 README。不靠手算偏移量（那种算法改一次条目就错一次）。
 const declaredAudit = Number((readme.match(/(\d+) 条静态自检/) || [])[1] || 0);
 const declaredSuites = Number((readme.match(/(\d+) 套端到端\/冒烟测试/) || [])[1] || 0);
 const actualSuites = fs
   .readdirSync('.')
   .filter((f) => f === 'smoke.mjs' || /^test-.*\.mjs$/.test(f)).length;
-
-let bad = 0;
-for (const [k, v] of Object.entries(checks)) {
-  console.log((v ? 'OK  ' : 'FAIL'), k);
-  if (!v) bad++;
-}
 
 const docChecks = {
   'README 里声明的测试套数 = 实际文件数': declaredSuites === actualSuites,
@@ -287,14 +289,21 @@ const docChecks = {
   })(),
 };
 
-// 声明条数这一条放在最后加：它要数「实际印出多少条 OK/FAIL」，
-// 而那等于 1（文件开头的 script 语法）+ checks 条目 + 本段条目（含它自己）。
-docChecks['README 里声明的自检条数 = 实际条数'] =
-  declaredAudit === 1 + Object.keys(checks).length + Object.keys(docChecks).length + 1;
-for (const [k, v] of Object.entries(docChecks)) {
-  console.log((v ? 'OK  ' : 'FAIL'), k);
-  if (!v) bad++;
-}
+let bad = 0;
+let printed = 0;
+const emit = (name, ok) => {
+  console.log((ok ? 'OK  ' : 'FAIL'), name);
+  printed++;
+  if (!ok) bad++;
+};
+
+// 文件开头那条「script 语法通过」是早先直接打印的，这里补记一行
+for (const [k, v] of Object.entries(checks)) emit(k, v);
+for (const [k, v] of Object.entries(docChecks)) emit(k, v);
+// 最后一条：把「实际印了多少行」与 README 声明值对齐（它自己也占一行）
+// 实际印出行数 = 1（文件开头的语法检查）+ checks 条目 + docChecks 条目 + 1（本条自身）
+const totalFromThisRun = printed + 2;
+emit('README 里声明的自检条数 = 实际条数', declaredAudit === totalFromThisRun);
 
 console.log(bad === 0 ? '\nALL PASS' : '\n' + bad + ' FAILED');
 process.exit(bad === 0 ? 0 : 1);

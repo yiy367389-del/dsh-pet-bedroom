@@ -116,6 +116,7 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 
 | 版本 | 内容 |
 |:--|:--|
+| [v2.3.5](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.5) | 带一键试用脚本 `start-trial.ps1`；自检条数改为自统计，不再手写 |
 | [v2.3.4](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.4) | 修「失败也报成功」：`/qq/test`、`/qq/config` 的 ok 被状态对象覆盖 |
 | [v2.3.3](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.3) | 验证脚本随包发布：从 Release 装下来也能直接跑 README 里的每条命令 |
 | [v2.3.2](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.2) | 自检条数与测试套数改为与实际一致 |
@@ -136,10 +137,10 @@ https://github.com/yiy367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pe
 一行安装：
 
 ```bash
-dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.3.4/dsh-pet-bedroom.tgz
+dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.3.5/dsh-pet-bedroom.tgz
 ```
 
-想固定某个版本就把 URL 里的 `v2.3.4` 换成对应 tag；想始终跟最新就把整段换成
+想固定某个版本就把 URL 里的 `v2.3.5` 换成对应 tag；想始终跟最新就把整段换成
 `releases/latest/download/dsh-pet-bedroom.tgz`。
 
 从源码安装（改代码时用）：
@@ -598,7 +599,7 @@ dsh-pet-bedroom/
 ├─ release.mjs            发版：从 tag 打包 + 建 Release + 上传资产
 ├─ test-entry.cjs         收录条目自检（对着 contributing.md 的 CI 检查项）
 ├─ locale/zh.json|en.json 文案
-├─ audit.cjs             静态自检（136 条：尺寸、姿态、路由、配置项、QQ 窗口……）
+├─ audit.cjs             静态自检（138 条：尺寸、姿态、路由、配置项、QQ 窗口……）
 ├─ smoke.mjs             冒烟：页面/房间图/壁纸/日记/笔记/路径逃逸
 ├─ test-aurabot.mjs      端到端：QQ 过滤 / 日记聚合（假服务）
 ├─ test-phone.mjs        端到端：手机会话 / 抖音接口
@@ -607,6 +608,7 @@ dsh-pet-bedroom/
 ├─ test-qq.mjs           端到端：QQ 连接窗口（保存/测试连接/上报校验/去重/进手机）
 ├─ test-qq-fail.mjs      端到端：写盘失败必须如实报 ok:false（不许假成功）
 ├─ preview.mjs           独立预览服务器（不重启 DSH 验证页面改动）
+├─ start-trial.ps1       一键试用：另起 profile 装 Release 包，不碰日常 profile
 ├─ v-*.mjs               Playwright 可视验证（头像/拨号/群聊/壁纸/圆角）
 ├─ make-chair.py         从 room.png 抠椅子生成前景层
 └─ register-chair.py     配准新椅子图到房间坐标系
@@ -662,7 +664,7 @@ python register-chair.py    # 把新椅子图配准到房间坐标系（需要 s
 
 ```bash
 cd <插件目录>            # profile 里的 node_modules/dsh-pet-bedroom，或 git clone 下来的目录
-node audit.cjs          # 136 条静态自检，必须 ALL PASS
+node audit.cjs          # 138 条静态自检，必须 ALL PASS
 node smoke.mjs          # 冒烟（临时目录，不碰真实数据）
 node test-aurabot.mjs   # 假聊天服务：QQ 过滤 + 日记聚合
 node test-phone.mjs     # 手机会话 + 抖音接口
@@ -678,6 +680,17 @@ node test-entry.cjs     # 收录条目：manifest / 分类 / 描述与代码一�
 
 所有测试都是**隔离的**：临时目录 + 假服务 + 假 `fetch`，不会读写你的真实记忆库、
 不会真的刷抖音、不会真的发 QQ 消息。
+
+一键起一个独立试用实例（不装进你日常用的 profile）：
+
+```powershell
+.\start-trial.ps1              # 默认 49790
+.\start-trial.ps1 -Port 49820  # 换端口
+```
+
+它会用 `bedroom-trial` 这个 profile 起一个只装了 `dsh-pet` + 本插件的 DSH Web 实例；
+启动后终端打印的带 token 地址就是入口，卧室在 `/dsh-pet-bedroom/`。
+改插件源码不影响它（它装的是 Release 包）。
 
 页面预览（不重启 DSH）：
 
@@ -754,7 +767,7 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 | 要求 | 状态 |
 |:--|:--|
 | `package.json` 声明 `dsh.bundle`（含 `patch`） | ✅ `"bundle": { "patch": "./cordis.patch.yml" }`，且 `cordis.patch.yml` 在仓库根 |
-| 真实可用的代码（非占位/纯 README） | ✅ 136 条静态自检 + 7 套端到端/冒烟测试全部通过 |
+| 真实可用的代码（非占位/纯 README） | ✅ 138 条静态自检 + 7 套端到端/冒烟测试全部通过 |
 | 仓库创建满 1 天 | ⏳ 建于 `2026-11-03T11:34Z`，`2026-11-04T11:34Z` 之后达标（CI 自动判定，代码无需改动） |
 | 添加 `dsh-plugin` topic | ✅ 已添加（另有 `desktop-pet`、`cordis-plugin`、`deepseek-harness`） |
 | 描述只讲功能、不夸大 | ✅ 描述里的「6 个工具」用 `test-entry.cjs` 对着 `index.js` 数过，QQ/抖音也各有一条断言 |
@@ -772,6 +785,11 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 
 ## 版本与演进
 
+- **v2.3.5**：加 `start-trial.ps1`（一键起一个只装 dsh-pet + 本插件的试用实例，
+  不碰日常 profile）。脚本必须带 UTF-8 BOM——Windows PowerShell 5.1 会把无 BOM 的
+  UTF-8 当 ANSI 读，中文注释直接把块结构读崩，报的还是无关行号。audit 新增两条守住这点。
+  另外把「自检条数」改成运行时自统计（数实际印出的行数），不再靠手写常量，
+  改条目时不会再出现「代码加了、README 没跟上」。
 - **v2.3.4**：修「失败也报成功」。本地装上后实测发现 `/qq/test` 与 `/qq/config` 的 `ok`
   被尾部铺开的状态对象（自带 `ok:true`）覆盖，端口填错时窗口仍会显示「通了」。
   现在判定写在状态之后；顺带把 426/101 翻译成人话（那是 WebSocket 端口，不是 HTTP API）。

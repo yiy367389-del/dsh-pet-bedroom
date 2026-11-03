@@ -3,6 +3,24 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.3.5] - 2026-11-03
+
+加一键试用脚本，并把「自检条数」改成自统计。
+
+### 新增
+
+- `start-trial.ps1`：用 `bedroom-trial` 这个独立 profile 起一个只装 `dsh-pet` + 本插件的
+  DSH Web 实例，支持 `-Port`；不碰日常用的 `desktop` profile，也不受源码改动影响。
+  文件必须带 UTF-8 BOM：Windows PowerShell 5.1 会把无 BOM 的 UTF-8 当 ANSI 解析，
+  中文注释会让整块结构读崩（实测报 `Missing closing '}'`，行号还指到无关的行）。
+- audit 新增两条：`start-trial.ps1` 存在且带 BOM、且已随包发布。
+
+### 变更
+
+- 「自检条数」改为运行时自统计：断言先收集、统一印出时数行，最后拿行数比对 README；
+  此前用的是手算偏移，改一次条目就错一次（本轮先后写错 137 / 136 / 135 三次）。
+- README「本地验证」补上试用脚本用法。
+
 ## [2.3.4] - 2026-11-03
 
 本地安装试用后发现并修掉一个会谎报成功的缺陷。
