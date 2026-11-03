@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release-notes.mjs 要读本地 tag 列表
 
       - uses: actions/setup-node@v4
         with:
@@ -46,3 +48,10 @@ jobs:
           else
             gh release create "$TAG" dist/dsh-pet-bedroom.tgz --title "$TAG" --notes-file release-notes.md
           fi
+
+      # 把 CHANGELOG 里该版本的小节写进 Release 说明（含安装命令），
+      # 手工发版与 CI 发版得到同一份说明。
+      - name: 补齐 Release 说明
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node release-notes.mjs

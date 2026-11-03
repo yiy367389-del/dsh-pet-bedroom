@@ -64,6 +64,8 @@ const checks = {
   '收录条目 tarball 用 latest/download': /tarball: https:\/\/github\.com\/[^\s]+\/releases\/latest\/download\/dsh-pet-bedroom\.tgz/
     .test(fs.readFileSync('.github/awesome-plugin-entry.yml', 'utf8')),
   '收录条目自检脚本存在': fs.existsSync('test-entry.cjs'),
+  'Release 说明补齐脚本存在': fs.existsSync('release-notes.mjs'),
+  '发版工作流会补齐 Release 说明': /node release-notes\.mjs/.test(fs.readFileSync('.github/workflows/release.yml', 'utf8')),
 
   '容器宽度是字面常量（不随进深变）': Boolean(widthMatch),
   [`角色约占舞台 ${charPct.toFixed(1)}%（目标 14%）`]: Math.abs(charPct - 14) <= 0.6,

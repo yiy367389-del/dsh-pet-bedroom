@@ -3,6 +3,21 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.3.1] - 2026-11-03
+
+每个 Release 的说明补上该版本正文，并把补齐动作接进发版流程。
+
+### 新增
+
+- `release-notes.mjs`：把 `CHANGELOG.md` 里对应版本的小节写进 Release 正文，末尾统一附
+  钉住 tag 与 `latest` 两条安装命令；可重复执行（内容一致就跳过）。
+- 发版工作流在发完 Release 后自动跑一次 `release-notes.mjs`，手工发版与 CI 发版说明一致。
+- audit 增至 132 条（新增「说明补齐脚本存在」「工作流会调用它」两项）。
+
+### 变更
+
+- 已回填 v2.0.0 / v2.1.0 / v2.2.0 / v2.2.1 / v2.2.2 / v2.3.0 六个 Release 的说明正文。
+
 ## [2.3.0] - 2026-11-03
 
 按 awesome-dsh-plugin 贡献指南优化收录条目与校验。
@@ -12,7 +27,7 @@
 - `test-entry.cjs`：把指南里「CI 会检查什么」落成 16 条断言（manifest、category 白名单、
   en/zh 引号与句号、`tarball` 必须 GitHub Release 的 `https .tgz` 且资产名不带版本号、
   `icon` 必须 GitHub 托管位图、描述里的「6 个工具」与 `index.js` 实数一致、单 PR 只 1 条）。
-- audit 新增 3 条：收录条目存在且 url 指向本仓库、`tarball` 用 `latest/download`、自检脚本在（共 130 条）。
+- audit 新增 3 条：收录条目存在且 url 指向本仓库、`tarball` 用 `latest/download`、自检脚本在（共 132 条）。
 
 ### 变更
 
