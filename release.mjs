@@ -38,6 +38,14 @@ const [, owner, repo] = m;
 
 /** 从 tag 解出一份干净工作树：保证资产和 tag 完全一致，而不是当前工作区 */
 function exportTag(tagName, dest) {
+  // 先确认 tag 存在：否则 git archive 只会甩一句 not a valid object name
+  try {
+    execFileSync('git', ['rev-parse', '--verify', 'refs/tags/' + tagName], { cwd: ROOT, stdio: 'pipe' });
+  } catch {
+    console.error(`没有 tag ${tagName}。先 \`git tag -a ${tagName} -m "..."\` 并推送，再发版。`);
+    console.error('（本地现有 tag：' + execFileSync('git', ['tag'], { cwd: ROOT, encoding: 'utf8' }).trim().split(/\r?\n/).join(' ') + '）');
+    process.exit(1);
+  }
   const tar = path.join(dest, 'src.tar');
   execFileSync('git', ['archive', '--format=tar', '--prefix=pkg/', tagName, '-o', tar], { cwd: ROOT, stdio: 'inherit' });
   execFileSync('tar', ['-xf', tar, '-C', dest], { cwd: ROOT, stdio: 'inherit' });

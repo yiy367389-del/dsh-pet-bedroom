@@ -247,10 +247,35 @@ const checks = {
   '退出样式': h.includes('button.exit'),
   'ctxmenu 样式': h.includes('.ctxmenu.open'),
 };
+
+// ---- 文档数字必须与实测一致（防止「说明里写 7 套、实际 6 套」这类漂移）----
+// 这段在循环之后跑：此时 Object.keys(checks).length 就是上面印出的 OK/FAIL 行数，
+// 本段自己再印一行，所以 README 里声明的条数应当等于「已印行数 + 1」。
+const declaredAudit = Number((readme.match(/(\d+) 条静态自检/) || [])[1] || 0);
+const declaredSuites = Number((readme.match(/(\d+) 套端到端\/冒烟测试/) || [])[1] || 0);
+const actualSuites = fs
+  .readdirSync('.')
+  .filter((f) => f === 'smoke.mjs' || /^test-.*\.mjs$/.test(f)).length;
+
 let bad = 0;
 for (const [k, v] of Object.entries(checks)) {
   console.log((v ? 'OK  ' : 'FAIL'), k);
   if (!v) bad++;
 }
+
+const docChecks = {
+  // 总数 = checks 条目 + 本段 3 条 + 文件开头那条「script 语法通过」
+  'README 里声明的自检条数 = 实际条数': declaredAudit === Object.keys(checks).length + 4,
+  'README 里声明的测试套数 = 实际文件数': declaredSuites === actualSuites,
+  '收录条目里的测试套数 = 实际文件数': (() => {
+    const m = entry.match(/(\d+) 套端到端测试/);
+    return Boolean(m) && Number(m[1]) === actualSuites;
+  })(),
+};
+for (const [k, v] of Object.entries(docChecks)) {
+  console.log((v ? 'OK  ' : 'FAIL'), k);
+  if (!v) bad++;
+}
+
 console.log(bad === 0 ? '\nALL PASS' : '\n' + bad + ' FAILED');
 process.exit(bad === 0 ? 0 : 1);

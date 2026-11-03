@@ -116,6 +116,7 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 
 | 版本 | 内容 |
 |:--|:--|
+| [v2.3.2](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.2) | 自检条数与测试套数改为与实际一致（135 条 / 6 套） |
 | [v2.3.1](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.1) | Release 说明补上版本正文；`release-notes.mjs` 接进发版流程 |
 | [v2.3.0](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.0) | 按收录指南优化条目：分类改 `fun`、描述可核对、新增 `test-entry.cjs` |
 | [v2.2.2](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.2.2) | 修复发版工作流：先建 `dist` 再打包，推 tag 即可自动发版 |
@@ -133,10 +134,10 @@ https://github.com/yiy367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pe
 一行安装：
 
 ```bash
-dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.3.1/dsh-pet-bedroom.tgz
+dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.3.2/dsh-pet-bedroom.tgz
 ```
 
-想固定某个版本就把 URL 里的 `v2.3.1` 换成对应 tag；想始终跟最新就把整段换成
+想固定某个版本就把 URL 里的 `v2.3.2` 换成对应 tag；想始终跟最新就把整段换成
 `releases/latest/download/dsh-pet-bedroom.tgz`。
 
 从源码安装（改代码时用）：
@@ -595,7 +596,7 @@ dsh-pet-bedroom/
 ├─ release.mjs            发版：从 tag 打包 + 建 Release + 上传资产
 ├─ test-entry.cjs         收录条目自检（对着 contributing.md 的 CI 检查项）
 ├─ locale/zh.json|en.json 文案
-├─ audit.cjs             静态自检（132 条：尺寸、姿态、路由、配置项、QQ 窗口……）
+├─ audit.cjs             静态自检（135 条：尺寸、姿态、路由、配置项、QQ 窗口……）
 ├─ smoke.mjs             冒烟：页面/房间图/壁纸/日记/笔记/路径逃逸
 ├─ test-aurabot.mjs      端到端：QQ 过滤 / 日记聚合（假服务）
 ├─ test-phone.mjs        端到端：手机会话 / 抖音接口
@@ -656,7 +657,7 @@ python register-chair.py    # 把新椅子图配准到房间坐标系（需要 s
 在项目目录里：
 
 ```bash
-node audit.cjs          # 132 条静态自检，必须 ALL PASS
+node audit.cjs          # 135 条静态自检，必须 ALL PASS
 node smoke.mjs          # 冒烟（临时目录，不碰真实数据）
 node test-aurabot.mjs   # 假聊天服务：QQ 过滤 + 日记聚合
 node test-phone.mjs     # 手机会话 + 抖音接口
@@ -744,7 +745,7 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 | 要求 | 状态 |
 |:--|:--|
 | `package.json` 声明 `dsh.bundle`（含 `patch`） | ✅ `"bundle": { "patch": "./cordis.patch.yml" }`，且 `cordis.patch.yml` 在仓库根 |
-| 真实可用的代码（非占位/纯 README） | ✅ 132 条静态自检 + 6 套端到端/冒烟测试全部通过 |
+| 真实可用的代码（非占位/纯 README） | ✅ 135 条静态自检 + 6 套端到端/冒烟测试全部通过 |
 | 仓库创建满 1 天 | ⏳ 建于 `2026-11-03T11:34Z`，`2026-11-04T11:34Z` 之后达标（CI 自动判定，代码无需改动） |
 | 添加 `dsh-plugin` topic | ✅ 已添加（另有 `desktop-pet`、`cordis-plugin`、`deepseek-harness`） |
 | 描述只讲功能、不夸大 | ✅ 描述里的「6 个工具」用 `test-entry.cjs` 对着 `index.js` 数过，QQ/抖音也各有一条断言 |
@@ -762,6 +763,8 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 
 ## 版本与演进
 
+- **v2.3.2**：文档数字改为与实际一致——自检 135 条、端到端/冒烟 6 套（此前写 7 套，多算了
+  一个不存在的测试文件）。这类数字现在由 `audit.cjs` 与 `test-entry.cjs` 一起守住。
 - **v2.3.1**：每个 Release 的说明补上该版本正文。`release-notes.mjs` 从 `CHANGELOG.md`
   取对应小节写进 Release 正文并附安装命令，可重复执行；发版工作流发完自动跑一次。
 - **v2.3.0**：按 awesome-dsh-plugin 指南优化收录条目。`category` 改 `fun`；描述改成可核对的

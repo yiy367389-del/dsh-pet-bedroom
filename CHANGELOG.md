@@ -3,6 +3,19 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.3.2] - 2026-11-03
+
+文档里的测试套数写错，跟着成品包一起发出去也会是错的，单独出一版修正。
+
+### 修复
+
+- README 与收录条目里的「7 套端到端测试」改为「6 套端到端/冒烟测试」（实际是 `smoke` + `test-aurabot` / `test-phone` / `test-group` / `test-config` / `test-qq`）。
+- 自检条数改为实际值：`node audit.cjs` 现在输出 135 条 OK（多出的 3 条是防止这类数字再次漂移的守卫）。
+- `audit.cjs` 新增 3 条文档守卫：README 声明的自检条数、README 声明的测试套数、
+  收录条目里的测试套数，三者都必须与实测一致；改文档漏同步会直接 FAIL。
+- `release.mjs` 指定不存在的 tag 时给出可读提示（并列出本地已有 tag），
+  而不是只甩一句 `not a valid object name`。
+
 ## [2.3.1] - 2026-11-03
 
 每个 Release 的说明补上该版本正文，并把补齐动作接进发版流程。
