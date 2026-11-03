@@ -57,6 +57,13 @@ const checks = {
   '市场图标是位图（不是 SVG）': fs.existsSync('assets/icon-180.png'),
   'release.mjs 使用固定资产名': /dsh-pet-bedroom\.tgz/.test(fs.readFileSync('release.mjs', 'utf8')),
   '发版工作流存在且推 tag 触发': /tags:\s*[\s\S]*v\*/.test(fs.readFileSync('.github/workflows/release.yml', 'utf8')),
+  '收录条目草稿存在且 url 指向本仓库': (() => {
+    const t = fs.readFileSync('.github/awesome-plugin-entry.yml', 'utf8');
+    return new RegExp('url: https://github\\.com/' + repoOwner + '/dsh-pet-bedroom').test(t);
+  })(),
+  '收录条目 tarball 用 latest/download': /tarball: https:\/\/github\.com\/[^\s]+\/releases\/latest\/download\/dsh-pet-bedroom\.tgz/
+    .test(fs.readFileSync('.github/awesome-plugin-entry.yml', 'utf8')),
+  '收录条目自检脚本存在': fs.existsSync('test-entry.cjs'),
 
   '容器宽度是字面常量（不随进深变）': Boolean(widthMatch),
   [`角色约占舞台 ${charPct.toFixed(1)}%（目标 14%）`]: Math.abs(charPct - 14) <= 0.6,

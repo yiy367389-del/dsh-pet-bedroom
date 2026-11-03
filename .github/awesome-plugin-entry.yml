@@ -2,16 +2,27 @@
 #
 # 用法：在 https://github.com/awesome-dsh-plugin/awesome-dsh-plugin 提 PR，
 # 新增文件 data/plugins/yiy367389-del__dsh-pet-bedroom.yml 内容即本文件（去掉注释）。
-# 仓库名/owner 必须与实际完全一致；一个 PR 只加这一条。
+# 仓库名/owner 必须与实际完全一致；一个 PR 最多 3 条，这里只有 1 条。
 #
-# 说明：本仓库已满足 dsh.bundle、真实代码、dsh-plugin topic 三项；
-# 「仓库创建满 1 天」由 CI 自动判定，创建当天提交会显示未达标，次日再提交即可。
+# 已逐项对照 contributing.md：
+#   · dsh.bundle.patch 指向 ./cordis.patch.yml（仓库根有该文件）        ✅
+#   · 真实可用代码（127 条静态自检 + 7 套端到端测试）                 ✅
+#   · dsh-plugin topic                                                ✅
+#   · 描述里的每个数字都能在代码里数出来（6 个工具 / QQ / 抖音）       ✅
+#   · 仓库创建满 1 天：2026-11-03T11:34Z 创建，次日 11:34Z 后达标      ⏳ CI 自动判定
+#   · tarball 用 latest/download 且资产名不带版本号（不会随发版 404）  ✅
+#   · icon 是 GitHub 托管的 180×180 PNG（不是 SVG / 第三方图床）       ✅
+#   · 不发 npm：条目照常工作，只是没有下载量数字                       ✅
+#
+# 类别选 fun：插件的主体是「桌宠在房间里活动」的观赏/陪伴体验；
+# QQ 与抖音都是可选外接。按指南「选贴合实际做的事的分类」，不选 ui。
+# 描述里避免冒号加空格，中英文都加了引号，防 YAML 解析成嵌套键。
 
 url: https://github.com/yiy367389-del/dsh-pet-bedroom
 name: yiy367389-del/dsh-pet-bedroom
-category: ui
+category: fun
 description:
-  en: A standalone bedroom web page where your dsh-pet desktop pet moves around, showing its real diary, notes and QQ chats; QQ (SnowLuma / OneBot 11) and Douyin connect through your own backends.
-  zh: 一个独立网页卧室：dsh-pet 的桌宠在房间里活动，展示真实的日记、笔记与 QQ 聊天；QQ（SnowLuma / OneBot 11）与抖音按接口接入你自己的后端。
+  en: 'A standalone bedroom page where the dsh-pet desktop pet walks between bed, desk and window, showing its real diary, reading notes and QQ chat log, and registering 6 bedroom tools for the agent. QQ (SnowLuma / OneBot 11) and Douyin are optional and connect through your own backend.'
+  zh: '独立卧室网页：dsh-pet 的桌宠在床、电脑桌与窗边之间活动，页面展示它真实的日记、读书笔记与 QQ 聊天记录，并为 agent 注册 6 个卧室工具。QQ（SnowLuma / OneBot 11）与抖音为可选项，接入你自己的后端。'
 icon: https://raw.githubusercontent.com/yiy367389-del/dsh-pet-bedroom/main/assets/icon-180.png
 tarball: https://github.com/yiy367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pet-bedroom.tgz

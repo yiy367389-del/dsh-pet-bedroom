@@ -116,6 +116,7 @@ QQ 与抖音是**可选的外部能力**，需要你自己接（见下文）。
 
 | 版本 | 内容 |
 |:--|:--|
+| [v2.3.0](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.3.0) | 按收录指南优化条目：分类改 `fun`、描述可核对、新增 `test-entry.cjs` |
 | [v2.2.2](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.2.2) | 修复发版工作流：先建 `dist` 再打包，推 tag 即可自动发版 |
 | [v2.2.1](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.2.1) | 修正 `latest` 指向：发版时显式标记最新，旧版不再抢 latest |
 | [v2.2.0](https://github.com/yiy367389-del/dsh-pet-bedroom/releases/tag/v2.2.0) | 发布形态整理：Releases 资产、截图、`release.mjs`、发版工作流 |
@@ -131,10 +132,10 @@ https://github.com/yiy367389-del/dsh-pet-bedroom/releases/latest/download/dsh-pe
 一行安装：
 
 ```bash
-dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.2.2/dsh-pet-bedroom.tgz
+dsh plugin add https://github.com/yiy367389-del/dsh-pet-bedroom/releases/download/v2.3.0/dsh-pet-bedroom.tgz
 ```
 
-想固定某个版本就把 URL 里的 `v2.2.2` 换成对应 tag；想始终跟最新就把整段换成
+想固定某个版本就把 URL 里的 `v2.3.0` 换成对应 tag；想始终跟最新就把整段换成
 `releases/latest/download/dsh-pet-bedroom.tgz`。
 
 从源码安装（改代码时用）：
@@ -591,8 +592,9 @@ dsh-pet-bedroom/
 │  ├─ workflows/release.yml  推 v* tag 自动发 Release
 │  └─ awesome-plugin-entry.yml 收录条目草稿（含 icon/tarball）
 ├─ release.mjs            发版：从 tag 打包 + 建 Release + 上传资产
+├─ test-entry.cjs         收录条目自检（对着 contributing.md 的 CI 检查项）
 ├─ locale/zh.json|en.json 文案
-├─ audit.cjs             静态自检（127 条：尺寸、姿态、路由、配置项、QQ 窗口……）
+├─ audit.cjs             静态自检（130 条：尺寸、姿态、路由、配置项、QQ 窗口……）
 ├─ smoke.mjs             冒烟：页面/房间图/壁纸/日记/笔记/路径逃逸
 ├─ test-aurabot.mjs      端到端：QQ 过滤 / 日记聚合（假服务）
 ├─ test-phone.mjs        端到端：手机会话 / 抖音接口
@@ -653,13 +655,14 @@ python register-chair.py    # 把新椅子图配准到房间坐标系（需要 s
 在项目目录里：
 
 ```bash
-node audit.cjs          # 127 条静态自检，必须 ALL PASS
+node audit.cjs          # 130 条静态自检，必须 ALL PASS
 node smoke.mjs          # 冒烟（临时目录，不碰真实数据）
 node test-aurabot.mjs   # 假聊天服务：QQ 过滤 + 日记聚合
 node test-phone.mjs     # 手机会话 + 抖音接口
 node test-group.mjs     # 群聊标题 + 发言人
 node test-config.mjs    # 通用接口：自定义 petRoute/chatService/douyinApiBase 全生效
 node test-qq.mjs        # QQ 连接窗口：保存/测试连接/上报鉴权/去重/进手机
+node test-entry.cjs     # 收录条目：manifest / 分类 / 描述与代码一致性（16 项）
 ```
 
 所有测试都是**隔离的**：临时目录 + 假服务 + 假 `fetch`，不会读写你的真实记忆库、
@@ -740,22 +743,27 @@ A：代码是跨平台的（路径都用 `path` 拼）。Windows 是主要验证
 | 要求 | 状态 |
 |:--|:--|
 | `package.json` 声明 `dsh.bundle`（含 `patch`） | ✅ `"bundle": { "patch": "./cordis.patch.yml" }`，且 `cordis.patch.yml` 在仓库根 |
-| 真实可用的代码（非占位/纯 README） | ✅ 127 条静态自检 + 7 套端到端测试全部通过 |
-| 仓库创建满 1 天 | ⏳ 仓库创建于 2026-11-03，次日达标（CI 自动判定，无需改代码） |
-| 添加 `dsh-plugin` topic | ✅ 已添加 |
-| 描述只讲功能、不夸大 | ✅ 条目描述与代码逐项对应（QQ 窗口 / 抖音接口 / 日记笔记 / 6 个工具） |
-| 可选：预构建 `tarball` | ✅ 每个 Release 都挂 `dsh-pet-bedroom.tgz`，条目里用 `latest/download` |
+| 真实可用的代码（非占位/纯 README） | ✅ 130 条静态自检 + 7 套端到端测试全部通过 |
+| 仓库创建满 1 天 | ⏳ 建于 `2026-11-03T11:34Z`，`2026-11-04T11:34Z` 之后达标（CI 自动判定，代码无需改动） |
+| 添加 `dsh-plugin` topic | ✅ 已添加（另有 `desktop-pet`、`cordis-plugin`、`deepseek-harness`） |
+| 描述只讲功能、不夸大 | ✅ 描述里的「6 个工具」用 `test-entry.cjs` 对着 `index.js` 数过，QQ/抖音也各有一条断言 |
+| 分类贴合实际做的事 | ✅ `fun`（主体是桌宠在房间活动的观赏体验，QQ/抖音为可选外接） |
+| 一个 PR 只加 1 条（上限 3） | ✅ 草稿里只有 1 条 `url:` |
+| 可选：预构建 `tarball` | ✅ 每个 Release 都挂 `dsh-pet-bedroom.tgz`；条目用 `latest/download`，资产名不带版本号（换版不会 404） |
 | 可选：市场截图 `screenshots.json` | ✅ 2 张（`assets/screenshot-room.jpg`、`assets/screenshot-qq.jpg`） |
-| 可选：市场图标 | ✅ `assets/icon-180.png`（GitHub 托管位图，非 SVG） |
+| 可选：市场图标 | ✅ `assets/icon-180.png`（180×180 PNG，GitHub 托管，非 SVG） |
 
 收录条目草稿在 [`.github/awesome-plugin-entry.yml`](.github/awesome-plugin-entry.yml)：
-提交到对方仓库时，新增 `data/plugins/yiy367389-del__dsh-pet-bedroom.yml`，内容即该文件（去掉注释），
-一个 PR 只加这一条。
+提交到对方仓库时，新增 `data/plugins/yiy367389-del__dsh-pet-bedroom.yml`，内容即该文件（去掉注释）。
+本地先用 `node test-entry.cjs` 把 CI 会查的 16 项过一遍（含描述与代码对不对得上）。
 
 ---
 
 ## 版本与演进
 
+- **v2.3.0**：按 awesome-dsh-plugin 指南优化收录条目。`category` 改 `fun`；描述改成可核对的
+  写法（「6 个工具」对着 `index.js` 数）；新增 `test-entry.cjs` 把 CI 会查的 16 项在本地跑一遍；
+  audit 增至 130 条。
 - **v2.2.2**：修复发版工作流。`npm pack --pack-destination dist` 在 `dist` 不存在时直接失败，
   v2.2.0 / v2.2.1 的 Action 都红在这一步；现在先 `mkdir -p dist`，推 tag 由 Action 自动发版。
 - **v2.2.1**：修正 `latest`。GitHub 的 `latest` 按 Release 创建时间算，批量补发旧版后

@@ -3,6 +3,24 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.3.0] - 2026-11-03
+
+按 awesome-dsh-plugin 贡献指南优化收录条目与校验。
+
+### 新增
+
+- `test-entry.cjs`：把指南里「CI 会检查什么」落成 16 条断言（manifest、category 白名单、
+  en/zh 引号与句号、`tarball` 必须 GitHub Release 的 `https .tgz` 且资产名不带版本号、
+  `icon` 必须 GitHub 托管位图、描述里的「6 个工具」与 `index.js` 实数一致、单 PR 只 1 条）。
+- audit 新增 3 条：收录条目存在且 url 指向本仓库、`tarball` 用 `latest/download`、自检脚本在（共 130 条）。
+
+### 变更
+
+- 收录条目的 `category` 从 `ui` 改为 `fun`：插件主体是桌宠在房间里活动的观赏/陪伴体验，
+  QQ 与抖音都是可选外接；按指南「选贴合实际做的事的分类」。
+- 条目描述改成可核对的写法，删掉模糊表述；中英文都加引号，避免 `: ` 被 YAML 解析成嵌套键。
+- 条目文件里写明逐项对照结果，以及「仓库满 1 天」由 CI 自动判定。
+
 ## [2.2.2] - 2026-11-03
 
 修复发版工作流：`npm pack --pack-destination dist` 在 `dist` 不存在时直接失败，
