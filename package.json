@@ -8,11 +8,11 @@
   "icon": "icon.svg",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yiyi367389-del/dsh-pet-bedroom.git"
+    "url": "git+https://github.com/yiy367389-del/dsh-pet-bedroom.git"
   },
-  "homepage": "https://github.com/yiyi367389-del/dsh-pet-bedroom#readme",
+  "homepage": "https://github.com/yiy367389-del/dsh-pet-bedroom#readme",
   "bugs": {
-    "url": "https://github.com/yiyi367389-del/dsh-pet-bedroom/issues"
+    "url": "https://github.com/yiy367389-del/dsh-pet-bedroom/issues"
   },
   "keywords": [
     "dsh-plugin",
