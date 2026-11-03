@@ -1,6 +1,6 @@
 {
   "name": "dsh-pet-bedroom",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -46,7 +46,23 @@
     "assets/wall/pine.jpg",
     "assets/wall/azure.jpg",
     "assets/wall/haze.jpg",
-    "assets/wall/dusk.jpg"
+    "assets/wall/dusk.jpg",
+    "audit.cjs",
+    "test-entry.cjs",
+    "smoke.mjs",
+    "test-aurabot.mjs",
+    "test-phone.mjs",
+    "test-group.mjs",
+    "test-config.mjs",
+    "test-qq.mjs",
+    "preview.mjs",
+    "v-*.mjs",
+    "make-chair.py",
+    "register-chair.py",
+    "release.mjs",
+    "release-notes.mjs",
+    ".github/awesome-plugin-entry.yml",
+    ".github/workflows/release.yml"
   ],
   "dsh": {
     "bundle": {

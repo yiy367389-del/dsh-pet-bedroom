@@ -264,14 +264,33 @@ for (const [k, v] of Object.entries(checks)) {
 }
 
 const docChecks = {
-  // 总数 = checks 条目 + 本段 3 条 + 文件开头那条「script 语法通过」
-  'README 里声明的自检条数 = 实际条数': declaredAudit === Object.keys(checks).length + 4,
   'README 里声明的测试套数 = 实际文件数': declaredSuites === actualSuites,
   '收录条目里的测试套数 = 实际文件数': (() => {
     const m = entry.match(/(\d+) 套端到端测试/);
     return Boolean(m) && Number(m[1]) === actualSuites;
   })(),
+  // README 让人在「项目目录」里跑的脚本，必须真的随发布包发出去，
+  // 否则从 Release 装下来的用户照着敲会 file not found。
+  'README 点名的脚本都随包发布': (() => {
+    const toRe = (pat) =>
+      new RegExp(
+        '^' +
+          pat
+            .split('/')
+            .map((seg) => (seg === '**' ? '.*' : seg === '*' ? '[^/]*' : seg.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')))
+            .join('/') +
+          '$',
+      );
+    const res = (pkg.files || []).map(toRe);
+    const named = [...new Set([...readme.matchAll(/^node ([\w.-]+\.(?:cjs|mjs|js))\s/gm)].map((m) => m[1]))];
+    return named.length > 0 && named.every((f) => fs.existsSync(f) && res.some((re) => re.test(f)));
+  })(),
 };
+
+// 声明条数这一条放在最后加：它要数「实际印出多少条 OK/FAIL」，
+// 而那等于 1（文件开头的 script 语法）+ checks 条目 + 本段条目（含它自己）。
+docChecks['README 里声明的自检条数 = 实际条数'] =
+  declaredAudit === 1 + Object.keys(checks).length + Object.keys(docChecks).length + 1;
 for (const [k, v] of Object.entries(docChecks)) {
   console.log((v ? 'OK  ' : 'FAIL'), k);
   if (!v) bad++;

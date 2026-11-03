@@ -3,6 +3,28 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.3.3] - 2026-11-03
+
+验证脚本随包发布，让 README 里的每条命令在 Release 产物里都真能跑。
+
+### 修复
+
+- `package.json` 的 `files` 补上 `audit.cjs`、`test-entry.cjs`、`smoke.mjs`、`test-*.mjs`、
+  `preview.mjs`、`v-*.mjs`、`make-chair.py`、`register-chair.py`、`release*.mjs` 与
+  `.github/`（条目草稿 + 发版工作流）。此前只带运行时代码，而 README 的「本地验证」
+  让人在项目目录跑 `node audit.cjs`——从 Release 装下来的用户会 file not found。
+
+### 新增
+
+- audit 新增守卫「README 点名的脚本都随包发布」：从 README 抽出所有 `node xxx` 命令，
+  逐个对 `files` 做 glob 匹配，缺一个就 FAIL（共 136 条）。
+- audit 的「声明条数」改成自洽计算：实际印出多少条，README 就必须写多少条，
+  不再靠手写常量维持。
+
+### 变更
+
+- README「本地验证」说明脚本随包发布，并补出「在插件目录内运行」这一前提。
+
 ## [2.3.2] - 2026-11-03
 
 文档里的测试套数写错，跟着成品包一起发出去也会是错的，单独出一版修正。
